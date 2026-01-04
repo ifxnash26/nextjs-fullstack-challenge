@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: nfc_postgres
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app_pw
+      POSTGRES_DB: app_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - nfc_pgdata:/var/lib/postgresql/data
+
+volumes:
+  nfc_pgdata:
