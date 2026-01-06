@@ -3,27 +3,65 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --background: 210 33% 98%;
+  --foreground: 218 23% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 218 23% 12%;
+  --primary: 222 84% 56%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 42 92% 54%;
+  --secondary-foreground: 218 23% 12%;
+  --muted: 210 20% 94%;
+  --muted-foreground: 220 10% 40%;
+  --accent: 280 65% 48%;
+  --accent-foreground: 210 33% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 220 15% 88%;
+  --input: 220 15% 88%;
+  --ring: 222 84% 56%;
+  --radius: 0.75rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+.dark {
+  --background: 222 28% 10%;
+  --foreground: 220 14% 96%;
+  --card: 224 24% 14%;
+  --card-foreground: 220 14% 96%;
+  --primary: 222 84% 56%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 42 92% 54%;
+  --secondary-foreground: 224 24% 12%;
+  --muted: 222 18% 20%;
+  --muted-foreground: 220 10% 70%;
+  --accent: 280 65% 58%;
+  --accent-foreground: 222 28% 10%;
+  --destructive: 0 72% 56%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 222 18% 26%;
+  --input: 222 18% 26%;
+  --ring: 222 84% 56%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
   }
-}
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  body {
+    @apply bg-background text-foreground;
+    background-image: radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.08), transparent 28%),
+      radial-gradient(circle at 80% 0%, rgba(248, 180, 55, 0.08), transparent 26%),
+      radial-gradient(circle at 50% 60%, rgba(45, 212, 191, 0.08), transparent 24%);
+    min-height: 100vh;
+  }
+
+  .dark body {
+    background-image: radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.15), transparent 28%),
+      radial-gradient(circle at 80% 0%, rgba(248, 180, 55, 0.12), transparent 26%),
+      radial-gradient(circle at 50% 60%, rgba(45, 212, 191, 0.12), transparent 24%),
+      radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.04), transparent 28%);
+  }
 }
 
 @layer utilities {

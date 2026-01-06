@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  IT_STAFF
+  VIEWER
+}
+
+enum AssetStatus {
+  IN_STOCK
+  ASSIGNED
+  REPAIR
+  RETIRED
+}
+
+model User {
+  id             String            @id @default(cuid())
+  name           String?
+  email          String            @unique
+  hashedPassword String
+  role           Role              @default(VIEWER)
+  sessions       Session[]
+  accounts       Account[]
+  memberships    WorkspaceMember[]
+  activities     AssetActivity[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  ownedWorkspaces Workspace[]      @relation("WorkspaceOwner")
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  ownerId     String?
+  owner       User?             @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members     WorkspaceMember[]
+  assets      Asset[]
+  people      Person[]
+  activities  AssetActivity[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model WorkspaceMember {
+  id          String    @id @default(cuid())
+  role        Role      @default(VIEWER)
+  userId      String
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, workspaceId])
+}
+
+model Person {
+  id          String    @id @default(cuid())
+  name        String
+  email       String?
+  title       String?
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assets      Asset[]   @relation("PersonAssets")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, name])
+}
+
+model Asset {
+  id            String        @id @default(cuid())
+  assetTag      String
+  serialNumber  String?
+  category      String?
+  brand         String?
+  model         String?
+  status        AssetStatus   @default(IN_STOCK)
+  location      String?
+  vendor        String?
+  purchaseDate  DateTime?
+  warrantyEnd   DateTime?
+  notes         String?
+  workspaceId   String
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedToId  String?
+  assignedTo    Person?       @relation("PersonAssets", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities    AssetActivity[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([workspaceId, assetTag])
+  @@index([workspaceId, status])
+  @@index([workspaceId, assignedToId])
+}
+
+model AssetActivity {
+  id          String    @id @default(cuid())
+  assetId     String
+  workspaceId String
+  userId      String?
+  action      String
+  changes     Json?
+  createdAt   DateTime  @default(now())
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}

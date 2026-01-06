@@ -1,0 +1,243 @@
+import { AssetStatus, Role } from "@prisma/client";
+import { Parser as CsvParser } from "json2csv";
+import { parse } from "csv-parse/sync";
+import { prisma } from "./prisma";
+import { AssetFilterInput, AssetInput, AssetUpdateInput, assetFilterSchema, assetInputSchema } from "./validators";
+import { canEditAssets, effectiveRole, hasRequiredRole } from "./rbac";
+import { getWorkspaceMembership } from "./workspaces";
+
+export async function listAssets(workspaceId: string, filters: AssetFilterInput) {
+  const parsed = assetFilterSchema.safeParse(filters);
+  const data = parsed.success ? parsed.data : {};
+  const where: any = { workspaceId };
+
+  if (data.status?.length) {
+    where.status = { in: data.status };
+  }
+
+  if (data.category) where.category = { contains: data.category, mode: "insensitive" };
+  if (data.brand) where.brand = { contains: data.brand, mode: "insensitive" };
+  if (data.model) where.model = { contains: data.model, mode: "insensitive" };
+  if (data.location) where.location = { contains: data.location, mode: "insensitive" };
+  if (data.vendor) where.vendor = { contains: data.vendor, mode: "insensitive" };
+  if (data.assignedTo) {
+    where.assignedTo = { name: { contains: data.assignedTo, mode: "insensitive" } };
+  }
+
+  if (data.q) {
+    where.OR = [
+      { assetTag: { contains: data.q, mode: "insensitive" } },
+      { serialNumber: { contains: data.q, mode: "insensitive" } },
+      { brand: { contains: data.q, mode: "insensitive" } },
+      { model: { contains: data.q, mode: "insensitive" } },
+      { notes: { contains: data.q, mode: "insensitive" } },
+      { location: { contains: data.q, mode: "insensitive" } },
+    ];
+  }
+
+  const orderBy = data.sort
+    ? { [data.sort]: data.direction ?? "desc" }
+    : { updatedAt: "desc" as const };
+
+  return prisma.asset.findMany({
+    where,
+    orderBy,
+    include: {
+      assignedTo: true,
+      activities: { orderBy: { createdAt: "desc" }, take: 5 },
+    },
+  });
+}
+
+export async function getAsset(workspaceId: string, assetId: string) {
+  return prisma.asset.findFirst({
+    where: { id: assetId, workspaceId },
+    include: {
+      assignedTo: true,
+      activities: { orderBy: { createdAt: "desc" }, take: 15, include: { user: true } },
+    },
+  });
+}
+
+async function logActivity(assetId: string, workspaceId: string, action: string, userId?: string, changes?: Record<string, unknown>) {
+  await prisma.assetActivity.create({
+    data: {
+      assetId,
+      workspaceId,
+      userId,
+      action,
+      changes: changes ? (changes as any) : undefined,
+    },
+  });
+}
+
+async function getEffectiveRole(userId: string, workspaceId: string) {
+  const [user, membership] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId } }),
+    getWorkspaceMembership(userId, workspaceId),
+  ]);
+  if (!user || !membership) {
+    throw new Error("Workspace access denied");
+  }
+
+  return { membership, role: effectiveRole(user.role, membership.role) };
+}
+
+export async function createAsset(workspaceId: string, userId: string, input: AssetInput) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+
+  const parsed = assetInputSchema.parse(input);
+  const asset = await prisma.asset.create({
+    data: {
+      ...parsed,
+      workspaceId,
+    },
+    include: { assignedTo: true },
+  });
+
+  await logActivity(asset.id, workspaceId, "Asset created", userId, parsed);
+  return asset;
+}
+
+export async function updateAsset(workspaceId: string, userId: string, assetId: string, input: Partial<AssetInput>) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+
+  const existing = await prisma.asset.findFirst({ where: { id: assetId, workspaceId } });
+  if (!existing) {
+    throw new Error("Asset not found");
+  }
+
+  const parsed = assetInputSchema.partial().parse(input);
+  const updated = await prisma.asset.update({
+    where: { id: assetId },
+    data: parsed,
+    include: { assignedTo: true },
+  });
+
+  const changes: Record<string, { before: unknown; after: unknown }> = {};
+  for (const key of Object.keys(parsed)) {
+    const typedKey = key as keyof AssetUpdateInput;
+    const before = (existing as any)[typedKey];
+    const after = (updated as any)[typedKey];
+    if (before !== after) {
+      changes[typedKey] = { before, after };
+    }
+  }
+  if (Object.keys(changes).length) {
+    await logActivity(assetId, workspaceId, "Asset updated", userId, changes);
+  }
+
+  return updated;
+}
+
+export async function deleteAsset(workspaceId: string, userId: string, assetId: string) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!hasRequiredRole(role, Role.ADMIN)) {
+    throw new Error("Only admins can delete assets");
+  }
+
+  const asset = await prisma.asset.delete({
+    where: { id: assetId },
+  });
+  await logActivity(assetId, workspaceId, "Asset deleted", userId);
+  return asset;
+}
+
+export async function importAssetsFromCsv(workspaceId: string, userId: string, csvText: string) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+
+  const records = parse(csvText, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+  }) as Record<string, string>[];
+
+  const created: string[] = [];
+  const updated: string[] = [];
+
+  for (const record of records) {
+    const payload: AssetInput = {
+      assetTag: record.assetTag,
+      serialNumber: record.serialNumber || undefined,
+      category: record.category || undefined,
+      brand: record.brand || undefined,
+      model: record.model || undefined,
+      status: (record.status?.toUpperCase() as AssetStatus) || AssetStatus.IN_STOCK,
+      location: record.location || undefined,
+      vendor: record.vendor || undefined,
+      purchaseDate: record.purchaseDate ? new Date(record.purchaseDate) : undefined,
+      warrantyEnd: record.warrantyEnd ? new Date(record.warrantyEnd) : undefined,
+      notes: record.notes || undefined,
+      assignedToId: undefined,
+    };
+
+    if (record.assignedTo) {
+      const person = await prisma.person.upsert({
+        where: {
+          workspaceId_name: {
+            workspaceId,
+            name: record.assignedTo,
+          },
+        },
+        create: {
+          workspaceId,
+          name: record.assignedTo,
+        },
+        update: {},
+      });
+      payload.assignedToId = person.id;
+    }
+
+    const existing = await prisma.asset.findFirst({
+      where: { workspaceId, assetTag: payload.assetTag },
+    });
+
+    if (existing) {
+      await updateAsset(workspaceId, userId, existing.id, payload);
+      updated.push(payload.assetTag);
+    } else {
+      await createAsset(workspaceId, userId, payload);
+      created.push(payload.assetTag);
+    }
+  }
+
+  return { created, updated, count: records.length };
+}
+
+export async function exportAssetsToCsv(workspaceId: string, filters: AssetFilterInput) {
+  const assets = await listAssets(workspaceId, filters);
+  const parser = new CsvParser({
+    fields: [
+      "assetTag",
+      "serialNumber",
+      "category",
+      "brand",
+      "model",
+      "status",
+      "location",
+      "vendor",
+      "purchaseDate",
+      "warrantyEnd",
+      "notes",
+      "assignedTo.name",
+    ],
+  });
+
+  const data = assets.map((asset) => ({
+    ...asset,
+    purchaseDate: asset.purchaseDate ? asset.purchaseDate.toISOString().split("T")[0] : "",
+    warrantyEnd: asset.warrantyEnd ? asset.warrantyEnd.toISOString().split("T")[0] : "",
+    "assignedTo.name": asset.assignedTo?.name ?? "",
+  }));
+
+  return parser.parse(data);
+}
