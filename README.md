@@ -16,3 +16,8 @@ Credentials-based auth with sessions plus CRUD for tasks and notes, built on Nex
 - In Vercel build settings, set the Build Command to `npm run vercel-build`.
 - Production migrations use `prisma migrate deploy` (never `migrate dev` in production).
 - Prisma Client generation runs during build via `prebuild`/`postinstall` and the `vercel-build` script.
+
+
+## Live Demo: https://nextjs-fullstack-challenge-cjw5ivolq-ifxnash26s-projects.vercel.app
+
+## Health: https://nextjs-fullstack-challenge-cjw5ivolq-ifxnash26s-projects.vercel.app/api/health
