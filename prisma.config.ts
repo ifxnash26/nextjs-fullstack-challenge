@@ -7,6 +7,10 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env.DATABASE_URL ?? "postgresql://app:app_pw@localhost:5432/app_db?schema=public",
+    // Migrate uses the direct (unpooled) connection when provided, otherwise falls back.
+    url:
+      process.env.DIRECT_URL ??
+      process.env.DATABASE_URL ??
+      "postgresql://app:app_pw@localhost:5432/app_db?schema=public",
   },
 });

@@ -7,6 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prebuild": "prisma generate",
+    "vercel-build": "prisma generate && prisma migrate deploy && next build",
     "test": "vitest run",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
@@ -36,5 +40,6 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^1.6.0"
-  }
+  },
+  "postinstall": "prisma generate"
 }

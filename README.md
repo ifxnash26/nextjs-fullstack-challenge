@@ -10,3 +10,9 @@ Credentials-based auth with sessions plus CRUD for tasks and notes, built on Nex
 4) Apply schema: `npx prisma migrate dev --name init`
 5) Start dev server: `npm run dev`
 6) Lint/tests: `npm run lint` and `npm run test`
+
+## Deployment (Vercel + Neon)
+- In Vercel Environment Variables (Preview + Production), set `DATABASE_URL` to the Neon pooled connection string and `DIRECT_URL` to the direct/unpooled connection string (migrations read `DIRECT_URL` first).
+- In Vercel build settings, set the Build Command to `npm run vercel-build`.
+- Production migrations use `prisma migrate deploy` (never `migrate dev` in production).
+- Prisma Client generation runs during build via `prebuild`/`postinstall` and the `vercel-build` script.
