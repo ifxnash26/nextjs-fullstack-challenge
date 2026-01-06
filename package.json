@@ -39,7 +39,12 @@
     "prisma": "^7.2.0",
     "tailwindcss": "^4",
     "typescript": "^5",
+<<<<<<< HEAD
     "vitest": "^1.6.0"
   },
   "postinstall": "prisma generate"
+=======
+    "vitest": "^4.0.16"
+  }
+>>>>>>> origin/main
 }
