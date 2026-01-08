@@ -43,7 +43,7 @@ export default async function WorkspaceLayout({
         userRole={role as RoleValue}
         userEmail={session.user.email}
       />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
+      <main className="w-full flex-1 px-4 py-6">{children}</main>
     </div>
   );
 }

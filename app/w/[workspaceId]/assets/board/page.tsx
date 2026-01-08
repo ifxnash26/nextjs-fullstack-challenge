@@ -9,6 +9,15 @@ import { AssetStatus } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+function formatAssetTag(tag: string) {
+  return tag.toUpperCase();
+}
+
+function formatCategoryLabel(category?: string | null) {
+  if (!category) return category;
+  return category.charAt(0).toUpperCase() + category.slice(1);
+}
+
 export default async function AssetBoardPage({ params }: { params: { workspaceId: string } }) {
   const session = await getCurrentSession();
   if (!session?.user?.id) redirect("/login");
@@ -34,7 +43,7 @@ export default async function AssetBoardPage({ params }: { params: { workspaceId
           <h1 className="text-3xl font-semibold leading-tight text-foreground">Board by status</h1>
           <p className="text-muted-foreground">Track assignments and lifecycle at a glance.</p>
         </div>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="px-4 py-2">
           <Link href={`/w/${params.workspaceId}/assets`}>Back to table</Link>
         </Button>
       </div>
@@ -55,8 +64,10 @@ export default async function AssetBoardPage({ params }: { params: { workspaceId
                   className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm transition hover:border-primary"
                 >
                   <div className="flex items-center justify-between">
-                    <p className="font-semibold text-foreground">{asset.assetTag}</p>
-                    <span className="text-xs text-muted-foreground">{asset.category || asset.model || asset.brand}</span>
+                    <p className="font-semibold text-foreground">{formatAssetTag(asset.assetTag)}</p>
+                    <span className="text-xs text-muted-foreground">
+                      {asset.model ? asset.model : asset.category ? formatCategoryLabel(asset.category) : asset.brand}
+                    </span>
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {asset.assignedTo?.name ? `Assigned to ${asset.assignedTo.name}` : "Unassigned"}

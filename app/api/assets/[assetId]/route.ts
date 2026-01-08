@@ -5,6 +5,7 @@ import { deleteAsset, getAsset, updateAsset } from "@/lib/assets";
 import { prisma } from "@/lib/prisma";
 import { assetInputSchema } from "@/lib/validators";
 import { getWorkspaceMembership } from "@/lib/workspaces";
+import { revalidatePath } from "next/cache";
 
 async function getWorkspaceIdForAsset(assetId: string) {
   const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { workspaceId: true } });
@@ -55,6 +56,9 @@ export async function PUT(request: Request, { params }: { params: { assetId: str
 
   try {
     const asset = await updateAsset(workspaceId, session.user.id, params.assetId, parsed.data);
+    revalidatePath(`/w/${workspaceId}/assets`);
+    revalidatePath(`/w/${workspaceId}/assets/board`);
+    revalidatePath(`/w/${workspaceId}/assets/${params.assetId}`);
     return NextResponse.json(asset);
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });

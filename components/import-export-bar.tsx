@@ -49,7 +49,12 @@ export function ImportExportBar({ workspaceId, exportUrl }: Props) {
   return (
     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-3">
-        <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={loading}>
+        <Button
+          variant="outline"
+          onClick={() => inputRef.current?.click()}
+          disabled={loading}
+          className="px-3 py-2"
+        >
           {loading ? "Importing..." : "Import CSV"}
         </Button>
         <a

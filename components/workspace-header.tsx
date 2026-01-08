@@ -23,7 +23,7 @@ export function WorkspaceHeader({ workspace, membershipRole, userRole, userEmail
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center font-semibold">A</div>

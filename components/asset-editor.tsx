@@ -14,6 +14,7 @@ interface AssetClientModel {
   id: string;
   status: AssetStatusValue;
   assignedToId: string | null;
+  category: string | null;
   location: string | null;
   vendor: string | null;
   purchaseDate: string | null;
@@ -40,6 +41,7 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
   const [formState, setFormState] = useState({
     status: asset.status as AssetStatusValue,
     assignedToId: asset.assignedToId ?? "",
+    category: asset.category ?? "",
     location: asset.location ?? "",
     vendor: asset.vendor ?? "",
     purchaseDate: asset.purchaseDate ?? "",
@@ -59,6 +61,7 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
     const payload = {
       status: formState.status,
       assignedToId: formState.assignedToId || null,
+      category: formState.category || undefined,
       location: formState.location || undefined,
       vendor: formState.vendor || undefined,
       purchaseDate: formState.purchaseDate ? formState.purchaseDate : undefined,
@@ -132,6 +135,18 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
             name="location"
             value={formState.location}
             onChange={(e) => updateField("location", e.target.value)}
+            disabled={!canEdit}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground" htmlFor="category">
+            Category
+          </label>
+          <Input
+            id="category"
+            name="category"
+            value={formState.category}
+            onChange={(e) => updateField("category", e.target.value)}
             disabled={!canEdit}
           />
         </div>

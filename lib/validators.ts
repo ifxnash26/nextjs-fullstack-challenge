@@ -31,6 +31,7 @@ export const assetUpdateSchema = assetInputSchema.partial().extend({
 
 export const assetFilterSchema = z.object({
   q: z.string().optional(),
+  assetTags: z.array(z.string()).optional(),
   status: z.array(z.nativeEnum(AssetStatus)).optional(),
   category: z.string().optional(),
   brand: z.string().optional(),
@@ -45,6 +46,7 @@ export const assetFilterSchema = z.object({
 export const filterSpecSchema = z.object({
   statuses: z.array(z.nativeEnum(AssetStatus)).optional(),
   search: z.string().optional(),
+  assetTags: z.array(z.string()).optional(),
   category: z.string().optional(),
   location: z.string().optional(),
   vendor: z.string().optional(),

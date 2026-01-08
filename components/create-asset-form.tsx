@@ -110,7 +110,7 @@ export function CreateAssetForm({ workspaceId }: { workspaceId: string }) {
         <Textarea id="notes" name="notes" placeholder="Procured via FY26 budget..." />
       </div>
       {error ? <Alert variant="error">{error}</Alert> : null}
-      <Button type="submit" disabled={loading}>
+      <Button type="submit" disabled={loading} className="px-3 py-2">
         {loading ? "Saving..." : "Add asset"}
       </Button>
     </form>

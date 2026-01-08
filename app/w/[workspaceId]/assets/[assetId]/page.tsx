@@ -16,6 +16,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { type AssetStatusValue } from "@/lib/constants";
 
+function formatAssetTag(tag: string) {
+  return tag.toUpperCase();
+}
+
+function formatCategoryLabel(category?: string | null) {
+  if (!category) return category;
+  return category.charAt(0).toUpperCase() + category.slice(1);
+}
+
 async function createPersonAction(formData: FormData) {
   "use server";
   const session = await getCurrentSession();
@@ -60,6 +69,7 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
     id: asset.id,
     status: asset.status as AssetStatusValue,
     assignedToId: asset.assignedToId ?? null,
+    category: asset.category ?? null,
     location: asset.location ?? null,
     vendor: asset.vendor ?? null,
     purchaseDate: asset.purchaseDate ? asset.purchaseDate.toISOString().split("T")[0] : null,
@@ -69,16 +79,18 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
   };
 
   const clientPeople = people.map((person) => ({ id: person.id, name: person.name }));
+  const secondary = asset.model ?? asset.category;
+  const secondaryLabel = asset.model ? secondary : formatCategoryLabel(secondary);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div>
           <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Asset</p>
-          <h1 className="text-3xl font-semibold leading-tight text-foreground">{asset.assetTag}</h1>
+          <h1 className="text-3xl font-semibold leading-tight text-foreground">{formatAssetTag(asset.assetTag)}</h1>
           <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
             <AssetStatusBadge status={asset.status} />
-            <span>{[asset.brand, asset.model || asset.category].filter(Boolean).join(" • ")}</span>
+            <span>{[asset.brand, secondaryLabel].filter(Boolean).join(" • ")}</span>
           </div>
         </div>
         <Button asChild variant="outline">
@@ -167,3 +179,4 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
     </div>
   );
 }
+

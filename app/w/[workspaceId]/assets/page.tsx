@@ -25,6 +25,15 @@ function parseStatuses(searchParams: Record<string, string | string[] | undefine
     .filter((value) => Object.values(AssetStatus).includes(value as AssetStatus)) as AssetStatus[];
 }
 
+function formatAssetTag(tag: string) {
+  return tag.toUpperCase();
+}
+
+function formatCategoryLabel(category?: string | null) {
+  if (!category) return category;
+  return category.charAt(0).toUpperCase() + category.slice(1);
+}
+
 export default async function AssetsPage({
   params,
   searchParams,
@@ -76,6 +85,12 @@ export default async function AssetsPage({
     acc[asset.status] = (acc[asset.status] || 0) + 1;
     return acc;
   }, {} as Record<AssetStatus, number>);
+  const statusGradients: Record<AssetStatus, string> = {
+    [AssetStatus.IN_STOCK]: "from-emerald-500/10",
+    [AssetStatus.ASSIGNED]: "from-sky-500/10",
+    [AssetStatus.REPAIR]: "from-amber-500/10",
+    [AssetStatus.RETIRED]: "from-slate-500/10",
+  };
 
   return (
     <div className="space-y-6">
@@ -100,11 +115,16 @@ export default async function AssetsPage({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-4">
         {Object.values(AssetStatus).map((status) => (
-          <div key={status} className="rounded-xl border border-border bg-card p-3">
-            <p className="text-sm text-muted-foreground">{status.replace("_", " ")}</p>
-            <p className="text-2xl font-semibold text-foreground">{statusCounts[status] ?? 0}</p>
+          <div
+            key={status}
+            className={`rounded-lg border border-border/70 bg-card/80 bg-gradient-to-br ${statusGradients[status]} to-transparent px-3 py-2 shadow-sm`}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              {status.replace("_", " ")}
+            </p>
+            <p className="text-xl font-semibold leading-none text-foreground">{statusCounts[status] ?? 0}</p>
           </div>
         ))}
       </div>
@@ -178,16 +198,19 @@ export default async function AssetsPage({
                 <option value="asc">Asc</option>
               </Select>
             </div>
-            <div className="flex items-end gap-2">
-              <Button type="submit" className="w-full">
-                Apply
-              </Button>
-              <Link
-                href={`/w/${params.workspaceId}/assets`}
-                className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:underline"
-              >
-                Clear
-              </Link>
+            <div className="space-y-1.5">
+              <span className="invisible text-sm font-medium text-foreground">Actions</span>
+              <div className="flex items-center gap-2">
+                <Button type="submit" className="h-10 w-full px-3">
+                  Apply
+                </Button>
+                <Link
+                  href={`/w/${params.workspaceId}/assets`}
+                  className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Clear
+                </Link>
+              </div>
             </div>
           </form>
           <ImportExportBar workspaceId={params.workspaceId} exportUrl={exportUrl} />
@@ -211,34 +234,38 @@ export default async function AssetsPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {assets.map((asset) => (
-                <TableRow key={asset.id}>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p className="font-semibold text-foreground">{asset.assetTag}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {[asset.brand, asset.model || asset.category].filter(Boolean).join(" • ")}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <AssetStatusBadge status={asset.status} />
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{asset.assignedTo?.name ?? "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{asset.location ?? "—"}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {asset.purchaseDate ? format(asset.purchaseDate, "MMM d, yyyy") : "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link
-                      href={`/w/${params.workspaceId}/assets/${asset.id}`}
-                      className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
-                    >
-                      View
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {assets.map((asset) => {
+                const secondary = asset.model ?? asset.category;
+                const secondaryLabel = asset.model ? secondary : formatCategoryLabel(secondary);
+                return (
+                  <TableRow key={asset.id}>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <p className="font-semibold text-foreground">{formatAssetTag(asset.assetTag)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {[asset.brand, secondaryLabel].filter(Boolean).join(" • ")}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <AssetStatusBadge status={asset.status} />
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{asset.assignedTo?.name ?? "-"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{asset.location ?? "-"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {asset.purchaseDate ? format(asset.purchaseDate, "MMM d, yyyy") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link
+                        href={`/w/${params.workspaceId}/assets/${asset.id}`}
+                        className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                      >
+                        View
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {assets.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
@@ -264,3 +291,6 @@ export default async function AssetsPage({
     </div>
   );
 }
+
+
+

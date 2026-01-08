@@ -6,13 +6,17 @@ import { AssetFilterInput, AssetInput, AssetUpdateInput, assetFilterSchema, asse
 import { canEditAssets, effectiveRole, hasRequiredRole } from "./rbac";
 import { getWorkspaceMembership } from "./workspaces";
 
-export async function listAssets(workspaceId: string, filters: AssetFilterInput) {
+function buildAssetWhere(workspaceId: string, filters: AssetFilterInput) {
   const parsed = assetFilterSchema.safeParse(filters);
   const data = parsed.success ? parsed.data : {};
   const where: any = { workspaceId };
 
   if (data.status?.length) {
     where.status = { in: data.status };
+  }
+
+  if (data.assetTags?.length) {
+    where.assetTag = { in: data.assetTags };
   }
 
   if (data.category) where.category = { contains: data.category, mode: "insensitive" };
@@ -35,6 +39,11 @@ export async function listAssets(workspaceId: string, filters: AssetFilterInput)
     ];
   }
 
+  return { where, data };
+}
+
+export async function listAssets(workspaceId: string, filters: AssetFilterInput) {
+  const { where, data } = buildAssetWhere(workspaceId, filters);
   const orderBy = data.sort
     ? { [data.sort]: data.direction ?? "desc" }
     : { updatedAt: "desc" as const };
@@ -83,45 +92,38 @@ async function getEffectiveRole(userId: string, workspaceId: string) {
   return { membership, role: effectiveRole(user.role, membership.role) };
 }
 
-export async function createAsset(workspaceId: string, userId: string, input: AssetInput) {
-  const { role } = await getEffectiveRole(userId, workspaceId);
-  if (!canEditAssets(role)) {
-    throw new Error("Insufficient role");
-  }
-
-  const parsed = assetInputSchema.parse(input);
+async function createAssetRecord(workspaceId: string, userId: string, parsedInput: AssetInput) {
   const asset = await prisma.asset.create({
     data: {
-      ...parsed,
+      ...parsedInput,
       workspaceId,
     },
     include: { assignedTo: true },
   });
 
-  await logActivity(asset.id, workspaceId, "Asset created", userId, parsed);
+  await logActivity(asset.id, workspaceId, "Asset created", userId, parsedInput);
   return asset;
 }
 
-export async function updateAsset(workspaceId: string, userId: string, assetId: string, input: Partial<AssetInput>) {
-  const { role } = await getEffectiveRole(userId, workspaceId);
-  if (!canEditAssets(role)) {
-    throw new Error("Insufficient role");
-  }
-
+async function updateAssetRecord(
+  workspaceId: string,
+  userId: string,
+  assetId: string,
+  parsedInput: Partial<AssetInput>,
+) {
   const existing = await prisma.asset.findFirst({ where: { id: assetId, workspaceId } });
   if (!existing) {
     throw new Error("Asset not found");
   }
 
-  const parsed = assetInputSchema.partial().parse(input);
   const updated = await prisma.asset.update({
     where: { id: assetId },
-    data: parsed,
+    data: parsedInput,
     include: { assignedTo: true },
   });
 
   const changes: Record<string, { before: unknown; after: unknown }> = {};
-  for (const key of Object.keys(parsed)) {
+  for (const key of Object.keys(parsedInput)) {
     const typedKey = key as keyof AssetUpdateInput;
     const before = (existing as any)[typedKey];
     const after = (updated as any)[typedKey];
@@ -136,6 +138,25 @@ export async function updateAsset(workspaceId: string, userId: string, assetId: 
   return updated;
 }
 
+export async function createAsset(workspaceId: string, userId: string, input: AssetInput) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+
+  const parsed = assetInputSchema.parse(input);
+  return createAssetRecord(workspaceId, userId, parsed);
+}
+
+export async function updateAsset(workspaceId: string, userId: string, assetId: string, input: Partial<AssetInput>) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+  const parsed = assetInputSchema.partial().parse(input);
+  return updateAssetRecord(workspaceId, userId, assetId, parsed);
+}
+
 export async function deleteAsset(workspaceId: string, userId: string, assetId: string) {
   const { role } = await getEffectiveRole(userId, workspaceId);
   if (!hasRequiredRole(role, Role.ADMIN)) {
@@ -147,6 +168,85 @@ export async function deleteAsset(workspaceId: string, userId: string, assetId: 
   });
   await logActivity(assetId, workspaceId, "Asset deleted", userId);
   return asset;
+}
+
+export async function previewAssetsForUpdate(workspaceId: string, filters: AssetFilterInput) {
+  const { where } = buildAssetWhere(workspaceId, filters);
+  const [count, sample] = await Promise.all([
+    prisma.asset.count({ where }),
+    prisma.asset.findMany({
+      where,
+      select: { assetTag: true, status: true },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  return { count, sample };
+}
+
+export async function findExistingAssetTags(workspaceId: string, tags: string[]) {
+  if (!tags.length) return [];
+  const existing = await prisma.asset.findMany({
+    where: { workspaceId, assetTag: { in: tags } },
+    select: { assetTag: true },
+  });
+  return existing.map((asset) => asset.assetTag);
+}
+
+export async function bulkCreateAssets(workspaceId: string, userId: string, assets: AssetInput[]) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+
+  const parsedAssets = assets.map((asset) => assetInputSchema.parse(asset));
+  const tags = parsedAssets.map((asset) => asset.assetTag);
+  const uniqueTags = new Set(tags);
+  if (uniqueTags.size !== tags.length) {
+    const duplicates = tags.filter((tag, index) => tags.indexOf(tag) !== index);
+    throw new Error(`Duplicate asset tags in request: ${Array.from(new Set(duplicates)).join(", ")}`);
+  }
+
+  const existing = await findExistingAssetTags(workspaceId, tags);
+  if (existing.length) {
+    throw new Error(`Asset tags already exist: ${existing.join(", ")}`);
+  }
+
+  const created: string[] = [];
+  for (const asset of parsedAssets) {
+    await createAssetRecord(workspaceId, userId, asset);
+    created.push(asset.assetTag);
+  }
+
+  return { count: created.length, created };
+}
+
+export async function bulkUpdateAssets(
+  workspaceId: string,
+  userId: string,
+  filters: AssetFilterInput,
+  updates: Partial<AssetInput>,
+) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!canEditAssets(role)) {
+    throw new Error("Insufficient role");
+  }
+
+  const parsedUpdates = assetInputSchema.partial().parse(updates);
+  const { where } = buildAssetWhere(workspaceId, filters);
+  const assets = await prisma.asset.findMany({
+    where,
+    select: { id: true, assetTag: true },
+  });
+
+  const updated: string[] = [];
+  for (const asset of assets) {
+    await updateAssetRecord(workspaceId, userId, asset.id, parsedUpdates);
+    updated.push(asset.assetTag);
+  }
+
+  return { count: updated.length, updated };
 }
 
 export async function importAssetsFromCsv(workspaceId: string, userId: string, csvText: string) {
