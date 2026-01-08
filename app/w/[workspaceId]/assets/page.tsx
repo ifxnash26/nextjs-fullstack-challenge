@@ -2,6 +2,7 @@ import { AskAiFilter } from "@/components/ask-ai-filter";
 import { CreateAssetForm } from "@/components/create-asset-form";
 import { ImportExportBar } from "@/components/import-export-bar";
 import { AssetStatusBadge } from "@/components/asset-status-badge";
+import { AssetListToggle } from "@/components/asset-list-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -217,6 +218,7 @@ export default async function AssetsPage({
         </CardContent>
       </Card>
 
+      <AssetListToggle count={assets.length} defaultOpen={false}>
       <Card>
         <CardHeader>
           <CardTitle>Assets</CardTitle>
@@ -227,7 +229,7 @@ export default async function AssetsPage({
               <TableRow>
                 <TableHead>Asset</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Assignee</TableHead>
+                <TableHead>User</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Purchase</TableHead>
                 <TableHead></TableHead>
@@ -277,6 +279,7 @@ export default async function AssetsPage({
           </Table>
         </CardContent>
       </Card>
+      </AssetListToggle>
 
       {canEditAssets(role) ? (
         <Card id="new-asset">

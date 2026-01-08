@@ -4,15 +4,19 @@ import { z } from "zod";
 import { AssetStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { deriveAssistantAction, filterSpecToAssetFilterInput } from "@/lib/ai";
-import { bulkCreateAssets, bulkUpdateAssets, findExistingAssetTags, previewAssetsForUpdate } from "@/lib/assets";
-import { filterSpecSchema, type AssetFilterInput } from "@/lib/validators";
+import { getAssistantIntentFromModel } from "@/lib/ai-client";
+import { bulkCreateAssets, bulkDeleteAssets, bulkUpdateAssets, findExistingAssetTags, previewAssetsForUpdate } from "@/lib/assets";
+import { filterSpecSchema, type AssetFilterInput, type AssetInput } from "@/lib/validators";
+import { prisma } from "@/lib/prisma";
 
 const updateSchema = z
   .object({
     status: z.nativeEnum(AssetStatus).optional(),
     category: z.string().min(1).optional(),
+    assignedTo: z.string().min(1).optional(),
+    location: z.string().min(1).optional(),
   })
-  .refine((data) => Boolean(data.status || data.category), { message: "update is required" });
+  .refine((data) => Boolean(data.status || data.category || data.assignedTo || data.location), { message: "update is required" });
 
 const createSchema = z.object({
   count: z.number().int().positive(),
@@ -56,6 +60,27 @@ export async function POST(request: Request) {
   }
 
   if (apply) {
+    if (body?.delete) {
+      const specResult = filterSpecSchema.safeParse(body?.spec);
+      if (!specResult.success) {
+        return NextResponse.json({ error: "spec is required" }, { status: 400 });
+      }
+
+      const filters = filterSpecToAssetFilterInput(specResult.data);
+      if (!hasFilterCriteria(filters)) {
+        return NextResponse.json({ error: "Please describe which assets to delete." }, { status: 400 });
+      }
+
+      try {
+        const result = await bulkDeleteAssets(workspaceId, session.user.id, filters);
+        return NextResponse.json({ intent: "delete", deletedCount: result.count });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Could not delete those assets.";
+        const status = message.includes("admin") ? 403 : 400;
+        return NextResponse.json({ error: message }, { status });
+      }
+    }
+
     if (body?.create) {
       const createResult = createSchema.safeParse(body.create);
       if (!createResult.success) {
@@ -99,7 +124,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Please describe which assets to update." }, { status: 400 });
     }
 
-    const result = await bulkUpdateAssets(workspaceId, session.user.id, filters, updateResult.data);
+    const updates: Partial<AssetInput> & { assignedTo?: string } = { ...updateResult.data };
+    if (updates.assignedTo) {
+      const person = await prisma.person.findFirst({
+        where: { workspaceId, name: { equals: updates.assignedTo, mode: "insensitive" } },
+      });
+
+      if (!person) {
+        return NextResponse.json({ error: `User "${updates.assignedTo}" not found. Add them first, then try again.` }, { status: 400 });
+      }
+
+      updates.assignedToId = person.id;
+      delete (updates as { assignedTo?: string }).assignedTo;
+    }
+
+    const result = await bulkUpdateAssets(workspaceId, session.user.id, filters, updates);
     return NextResponse.json({ intent: "update", updatedCount: result.count });
   }
 
@@ -108,7 +147,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "text is required" }, { status: 400 });
   }
 
-  const intent = deriveAssistantAction(text);
+  const modelIntent = await getAssistantIntentFromModel(text).catch(() => null);
+  const intent = modelIntent ?? deriveAssistantAction(text);
   if (intent.intent === "filter") {
     return NextResponse.json({ intent: "filter", spec: intent.spec });
   }
@@ -128,6 +168,25 @@ export async function POST(request: Request) {
       intent: "update",
       spec: intent.spec,
       update: intent.update,
+      count: preview.count,
+      sample: preview.sample,
+    });
+  }
+
+  if (intent.intent === "delete") {
+    const filters = filterSpecToAssetFilterInput(intent.spec);
+    if (!hasFilterCriteria(filters)) {
+      return NextResponse.json({ error: "Please describe which assets to delete." }, { status: 400 });
+    }
+
+    const preview = await previewAssetsForUpdate(workspaceId, filters);
+    if (!preview.count) {
+      return NextResponse.json({ error: "No assets match that request." }, { status: 400 });
+    }
+
+    return NextResponse.json({
+      intent: "delete",
+      spec: intent.spec,
       count: preview.count,
       sample: preview.sample,
     });

@@ -166,7 +166,6 @@ export async function deleteAsset(workspaceId: string, userId: string, assetId: 
   const asset = await prisma.asset.delete({
     where: { id: assetId },
   });
-  await logActivity(assetId, workspaceId, "Asset deleted", userId);
   return asset;
 }
 
@@ -247,6 +246,27 @@ export async function bulkUpdateAssets(
   }
 
   return { count: updated.length, updated };
+}
+
+export async function bulkDeleteAssets(workspaceId: string, userId: string, filters: AssetFilterInput) {
+  const { role } = await getEffectiveRole(userId, workspaceId);
+  if (!hasRequiredRole(role, Role.ADMIN)) {
+    throw new Error("Only admins can delete assets");
+  }
+
+  const { where } = buildAssetWhere(workspaceId, filters);
+  const assets = await prisma.asset.findMany({
+    where,
+    select: { id: true, assetTag: true },
+  });
+
+  const deleted: string[] = [];
+  for (const asset of assets) {
+    await deleteAsset(workspaceId, userId, asset.id);
+    deleted.push(asset.assetTag);
+  }
+
+  return { count: deleted.length, deleted };
 }
 
 export async function importAssetsFromCsv(workspaceId: string, userId: string, csvText: string) {

@@ -198,7 +198,12 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
       </div>
       {error ? <Alert variant="error">{error}</Alert> : null}
       {canEdit ? (
-        <Button type="submit" disabled={loading}>
+        <Button
+          type="submit"
+          variant="outline"
+          className="border-border bg-background text-foreground shadow-sm transition hover:bg-muted"
+          disabled={loading}
+        >
           {loading ? "Saving..." : "Save changes"}
         </Button>
       ) : (

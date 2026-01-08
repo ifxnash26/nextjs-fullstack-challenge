@@ -1,5 +1,4 @@
 import { AssetStatusBadge } from "@/components/asset-status-badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentSession } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
@@ -43,9 +42,12 @@ export default async function AssetBoardPage({ params }: { params: { workspaceId
           <h1 className="text-3xl font-semibold leading-tight text-foreground">Board by status</h1>
           <p className="text-muted-foreground">Track assignments and lifecycle at a glance.</p>
         </div>
-        <Button asChild variant="outline" className="px-4 py-2">
-          <Link href={`/w/${params.workspaceId}/assets`}>Back to table</Link>
-        </Button>
+        <Link
+          href={`/w/${params.workspaceId}/assets`}
+          className="rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+        >
+          Back to table
+        </Link>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {grouped.map((column) => (

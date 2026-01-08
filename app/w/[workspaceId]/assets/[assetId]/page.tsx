@@ -4,6 +4,7 @@ import { AssetSummaryButton } from "@/components/asset-summary-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { getCurrentSession } from "@/lib/auth";
 import { getAsset } from "@/lib/assets";
 import { prisma } from "@/lib/prisma";
@@ -46,6 +47,48 @@ async function createPersonAction(formData: FormData) {
       workspaceId,
     },
   });
+
+  revalidatePath(`/w/${workspaceId}/assets/${assetId}`);
+}
+
+async function bulkCreatePeopleAction(formData: FormData) {
+  "use server";
+  const session = await getCurrentSession();
+  if (!session?.user?.id) redirect("/login");
+
+  const workspaceId = String(formData.get("workspaceId") || "");
+  const assetId = String(formData.get("assetId") || "");
+  const raw = String(formData.get("people") || "").trim();
+
+  if (!workspaceId || !assetId || !raw) return;
+
+  const rows = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const row of rows) {
+    const parts = row.split(",").map((part) => part.trim());
+    const name = parts[0];
+    if (!name) continue;
+
+    const email = parts[1] || null;
+    const title = parts[2] || null;
+
+    await prisma.person.upsert({
+      where: {
+        workspaceId_name: {
+          workspaceId,
+          name,
+        },
+      },
+      create: { workspaceId, name, email, title },
+      update: {
+        ...(email ? { email } : {}),
+        ...(title ? { title } : {}),
+      },
+    });
+  }
 
   revalidatePath(`/w/${workspaceId}/assets/${assetId}`);
 }
@@ -93,9 +136,12 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
             <span>{[asset.brand, secondaryLabel].filter(Boolean).join(" • ")}</span>
           </div>
         </div>
-        <Button asChild variant="outline">
-          <Link href={`/w/${params.workspaceId}/assets`}>Back to table</Link>
-        </Button>
+        <Link
+          href={`/w/${params.workspaceId}/assets`}
+          className="rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+        >
+          Back to table
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -127,9 +173,9 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
       {canEdit ? (
         <Card>
           <CardHeader>
-            <CardTitle>Add a person</CardTitle>
+            <CardTitle>Add User</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-6">
             <form action={createPersonAction} className="grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
               <input type="hidden" name="workspaceId" value={params.workspaceId} />
               <input type="hidden" name="assetId" value={asset.id} />
@@ -151,7 +197,38 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
                 </label>
                 <Input id="title" name="title" placeholder="IT Lead" />
               </div>
-              <Button type="submit">Add person</Button>
+              <Button
+                type="submit"
+                variant="outline"
+                className="h-10 border-border bg-background text-foreground shadow-sm transition hover:bg-muted"
+              >
+                Add User
+              </Button>
+            </form>
+            <form action={bulkCreatePeopleAction} className="space-y-3">
+              <input type="hidden" name="workspaceId" value={params.workspaceId} />
+              <input type="hidden" name="assetId" value={asset.id} />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground" htmlFor="people">
+                  Bulk add users
+                </label>
+                <Textarea
+                  id="people"
+                  name="people"
+                  rows={4}
+                  placeholder="Name, email, title&#10;Ada Lovelace, ada@example.com, IT Lead&#10;Grace Hopper, grace@example.com, Engineer"
+                />
+                <p className="text-xs text-muted-foreground">
+                  One user per line. Format: name, optional email, optional title. Existing names are updated.
+                </p>
+              </div>
+              <Button
+                type="submit"
+                variant="outline"
+                className="h-10 border-border bg-background text-foreground shadow-sm transition hover:bg-muted"
+              >
+                Add Users
+              </Button>
             </form>
           </CardContent>
         </Card>

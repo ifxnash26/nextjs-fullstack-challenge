@@ -14,14 +14,14 @@ function getPreferredTheme(): Theme {
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
     setTheme(getPreferredTheme());
   }, []);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
+    if (typeof document === "undefined" || !theme) return;
     const root = document.documentElement;
     if (theme === "dark") {
       root.classList.add("dark");
@@ -39,7 +39,8 @@ export function ThemeToggle() {
       variant="ghost"
       className="h-9 w-9 p-0"
       aria-label="Toggle theme"
-      onClick={() => setTheme(nextTheme)}
+      onClick={() => theme && setTheme(nextTheme)}
+      disabled={!theme}
     >
       {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>

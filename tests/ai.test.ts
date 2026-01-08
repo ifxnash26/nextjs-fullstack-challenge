@@ -40,4 +40,31 @@ describe("ai update parsing", () => {
     expect(result.spec.assetTags?.[0]).toBe("MYIPAD0307");
     expect(result.spec.assetTags?.[result.spec.assetTags.length - 1]).toBe("MYIPAD0374");
   });
+
+  it("parses assignee updates", () => {
+    const result = deriveAssistantAction("assign one ipad to muhammad irfan");
+
+    expect(result.intent).toBe("update");
+    if (result.intent !== "update") return;
+
+    expect(result.update.assignedTo).toBe("muhammad irfan");
+  });
+
+  it("parses delete intents", () => {
+    const result = deriveAssistantAction("delete assets in stock");
+
+    expect(result.intent).toBe("delete");
+    if (result.intent !== "delete") return;
+
+    expect(result.spec.statuses).toContain(AssetStatus.IN_STOCK);
+  });
+
+  it("parses delete intents with category keyword", () => {
+    const result = deriveAssistantAction("delete all laptop");
+
+    expect(result.intent).toBe("delete");
+    if (result.intent !== "delete") return;
+
+    expect(result.spec.category).toBe("laptop");
+  });
 });

@@ -87,7 +87,7 @@ export default async function AdminUsersPage() {
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6 px-4 md:px-6">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.25em] text-muted-foreground">Admin</p>
@@ -148,7 +148,10 @@ export default async function AdminUsersPage() {
                 ))}
               </Select>
             </div>
-            <Button type="submit" className="md:col-span-1">
+            <Button
+              type="submit"
+              className="md:col-span-1 h-10 rounded-full px-4 font-semibold"
+            >
               Create
             </Button>
           </form>

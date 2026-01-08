@@ -8,7 +8,9 @@ const statusKeywords: Record<AssetStatus, string[]> = {
   [AssetStatus.RETIRED]: ["retired", "decommissioned", "disposed"],
 };
 
-const updateVerbs = ["change", "update", "set", "mark", "make", "move", "switch"];
+const updateVerbs = ["change", "update", "set", "mark", "make", "move", "switch", "assign", "reassign"];
+const assignVerbs = ["assign", "reassign"];
+const deleteVerbs = ["delete", "remove", "erase", "wipe", "purge", "destroy", "drop"];
 const createVerbs = ["add", "create", "register"];
 const filterVerbs = ["show", "list", "find", "search", "display", "see", "view", "get", "fetch", "give"];
 const unitWords = ["unit", "units", "pcs", "pieces", "items", "assets", "asset", "devices", "device"];
@@ -19,6 +21,7 @@ const filterFillerWords = [
   "please",
   "pls",
   "for",
+  "to",
   "all",
   "any",
   "the",
@@ -61,6 +64,16 @@ function createStatusRegex(flags: string) {
 
 function hasUpdateVerb(text: string) {
   const verbPattern = updateVerbs.map(escapeRegExp).join("|");
+  return new RegExp(`\\b(?:${verbPattern})\\b`, "i").test(text);
+}
+
+function hasDeleteVerb(text: string) {
+  const verbPattern = deleteVerbs.map(escapeRegExp).join("|");
+  return new RegExp(`\\b(?:${verbPattern})\\b`, "i").test(text);
+}
+
+function hasAssignVerb(text: string) {
+  const verbPattern = assignVerbs.map(escapeRegExp).join("|");
   return new RegExp(`\\b(?:${verbPattern})\\b`, "i").test(text);
 }
 
@@ -259,6 +272,17 @@ function extractCategoryByKeyword(text: string) {
   return extractCategoryMatch(text)?.value;
 }
 
+function extractAssigneeMatch(text: string) {
+  const match = text.match(/\b(?:assign|reassign)\b.*?\bto\s+([a-z][a-z0-9\s.'-]{1,80})/i);
+  if (match?.[1]) {
+    const value = match[1].replace(/[^a-z0-9\s.'-]+/gi, " ").replace(/\s+/g, " ").trim();
+    if (value) {
+      return { value, matchText: match[0] };
+    }
+  }
+  return null;
+}
+
 function extractCategory(text: string) {
   const normalized = text.toLowerCase();
   const explicitCategory = extractCategoryByKeyword(normalized);
@@ -322,6 +346,17 @@ function extractCategory(text: string) {
   return categoryTokens.length ? categoryTokens.join(" ") : undefined;
 }
 
+function extractLocationMatch(text: string) {
+  const match = text.match(/\blocation\b\s*(?:to|in|at|is)?\s*([a-z][a-z0-9\s.'-]{1,80})/i);
+  if (match?.[1]) {
+    const value = match[1].replace(/[^a-z0-9\s.'-]+/gi, " ").replace(/\s+/g, " ").trim();
+    if (value) {
+      return { value, matchText: match[0] };
+    }
+  }
+  return null;
+}
+
 export function deriveFiltersFromText(text: string): FilterSpec {
   const normalized = text.toLowerCase();
   const statuses: AssetStatus[] = [];
@@ -374,8 +409,9 @@ export type CreateSpec = {
 
 export type AssistantIntent =
   | { intent: "filter"; spec: FilterSpec }
-  | { intent: "update"; spec: FilterSpec; update: { status?: AssetStatus; category?: string } }
+  | { intent: "update"; spec: FilterSpec; update: { status?: AssetStatus; category?: string; assignedTo?: string } }
   | { intent: "create"; create: CreateSpec }
+  | { intent: "delete"; spec: FilterSpec }
   | { intent: "unknown"; message: string };
 
 export function deriveAssistantAction(text: string): AssistantIntent {
@@ -456,9 +492,42 @@ export function deriveAssistantAction(text: string): AssistantIntent {
   const categorySource = tagRangeNormalized ? normalized.replace(tagRangeNormalized.matchText, " ") : normalized;
   const categoryMatch = extractCategoryMatch(categorySource);
   const targetCategory = categoryMatch?.value;
-  const hasVerb = hasUpdateVerb(normalized);
+  const assigneeMatch = extractAssigneeMatch(normalized);
+  const targetAssignee = assigneeMatch?.value;
+  const hasVerb = hasUpdateVerb(normalized) || hasAssignVerb(normalized);
 
-  if (hasVerb && (targetStatus || targetCategory)) {
+  if (hasDeleteVerb(normalized)) {
+    const tagRangeRaw = extractTagRange(text);
+    const parsedRange = tagRangeRaw ? parseTagRange(tagRangeRaw) : tagRangeNormalized ? parseTagRange(tagRangeNormalized) : null;
+    if ((tagRangeRaw || tagRangeNormalized) && !parsedRange) {
+      return {
+        intent: "unknown",
+        message: "Tag ranges must use the same prefix and number width, like \"MYIPAD0307 to MYIPAD0374\".",
+      };
+    }
+
+    let cleaned = normalized;
+    cleaned = cleaned.replace(new RegExp(`\\b(?:${deleteVerbs.map(escapeRegExp).join("|")})\\b`, "gi"), " ");
+    if (tagRangeNormalized?.matchText) cleaned = cleaned.replace(tagRangeNormalized.matchText, " ");
+    cleaned = stripCommandWords(cleaned);
+
+    const spec = deriveFiltersFromText(cleaned);
+    if (parsedRange) {
+      spec.assetTags = buildTagsFromRange(parsedRange);
+      delete spec.search;
+    }
+    if (!spec.category && spec.search) {
+      const trimmed = spec.search.trim();
+      if (trimmed && !trimmed.includes(" ")) {
+        spec.category = trimmed;
+        delete spec.search;
+      }
+    }
+
+    return { intent: "delete", spec };
+  }
+
+  if (hasVerb && (targetStatus || targetCategory || targetAssignee)) {
     const tagRangeRaw = extractTagRange(text);
     const parsedRange = tagRangeRaw ? parseTagRange(tagRangeRaw) : tagRangeNormalized ? parseTagRange(tagRangeNormalized) : null;
     if ((tagRangeRaw || tagRangeNormalized) && !parsedRange) {
@@ -471,6 +540,9 @@ export function deriveAssistantAction(text: string): AssistantIntent {
     let cleaned = normalized;
     if (targetStatus) cleaned = stripTargetStatusPhrase(cleaned, targetStatus);
     if (categoryMatch?.matchText) cleaned = cleaned.replace(categoryMatch.matchText, " ");
+    if (targetAssignee) {
+      cleaned = cleaned.replace(new RegExp(`\\b${escapeRegExp(targetAssignee)}\\b`, "gi"), " ");
+    }
     if (tagRangeNormalized?.matchText) cleaned = cleaned.replace(tagRangeNormalized.matchText, " ");
     cleaned = stripCommandWords(cleaned);
 
@@ -486,6 +558,7 @@ export function deriveAssistantAction(text: string): AssistantIntent {
       update: {
         ...(targetStatus ? { status: targetStatus } : {}),
         ...(targetCategory ? { category: targetCategory } : {}),
+        ...(targetAssignee ? { assignedTo: targetAssignee } : {}),
       },
     };
   }
@@ -494,7 +567,7 @@ export function deriveAssistantAction(text: string): AssistantIntent {
     return {
       intent: "unknown",
       message:
-        "I can update status or category with requests like \"change all ipads to assigned\" or \"set category to ipad for MYIPAD0307-MYIPAD0374\".",
+        "I can update status, category, or assignee with requests like \"change all ipads to assigned\", \"set category to ipad for MYIPAD0307-MYIPAD0374\", or \"assign ipads to Jane Doe\".",
     };
   }
 
