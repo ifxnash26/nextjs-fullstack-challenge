@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { exportAssetsToCsv } from "@/lib/assets";
 import { getWorkspaceMembership } from "@/lib/workspaces";
 import { AssetStatus } from "@prisma/client";
@@ -27,6 +27,17 @@ export async function GET(request: Request) {
     .flatMap((s) => s.split(","))
     .map((s) => s.trim().toUpperCase())
     .filter((s) => Object.values(AssetStatus).includes(s as AssetStatus)) as AssetStatus[];
+  const warrantyExpiringInDays = searchParams.get("warrantyExpiringInDays");
+  const purchasedWithinDays = searchParams.get("purchasedWithinDays");
+  const limit = searchParams.get("limit");
+  const sortParam = searchParams.get("sort");
+  const directionParam = searchParams.get("direction");
+  const allowedSort = ["updatedAt", "createdAt", "purchaseDate", "warrantyEnd", "assetTag"] as const;
+  const allowedDirection = ["asc", "desc"] as const;
+  const sort = allowedSort.includes(sortParam as (typeof allowedSort)[number]) ? (sortParam as (typeof allowedSort)[number]) : undefined;
+  const direction = allowedDirection.includes(directionParam as (typeof allowedDirection)[number])
+    ? (directionParam as (typeof allowedDirection)[number])
+    : undefined;
 
   const csv = await exportAssetsToCsv(workspaceId, {
     q: searchParams.get("q") ?? undefined,
@@ -34,9 +45,13 @@ export async function GET(request: Request) {
     brand: searchParams.get("brand") ?? undefined,
     model: searchParams.get("model") ?? undefined,
     location: searchParams.get("location") ?? undefined,
-    vendor: searchParams.get("vendor") ?? undefined,
     assignedTo: searchParams.get("assignedTo") ?? undefined,
     status: status.length ? status : undefined,
+    warrantyExpiringInDays: warrantyExpiringInDays ? Number(warrantyExpiringInDays) : undefined,
+    purchasedWithinDays: purchasedWithinDays ? Number(purchasedWithinDays) : undefined,
+    limit: limit ? Number(limit) : undefined,
+    sort: sort ?? undefined,
+    direction: direction ?? undefined,
   });
 
   return new NextResponse(csv, {

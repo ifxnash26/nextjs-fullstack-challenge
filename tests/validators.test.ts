@@ -15,8 +15,7 @@ describe("validators", () => {
   });
 
   it("accepts filter spec structure", () => {
-    const parsed = filterSpecSchema.parse({ statuses: [AssetStatus.REPAIR], vendor: "cdw" });
-    expect(parsed.vendor).toBe("cdw");
+    const parsed = filterSpecSchema.parse({ statuses: [AssetStatus.REPAIR] });
     expect(parsed.statuses?.[0]).toBe(AssetStatus.REPAIR);
   });
 

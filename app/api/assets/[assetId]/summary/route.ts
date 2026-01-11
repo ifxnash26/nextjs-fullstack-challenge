@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { getAsset } from "@/lib/assets";
 import { getWorkspaceMembership } from "@/lib/workspaces";

@@ -30,6 +30,7 @@ model User {
   accounts       Account[]
   memberships    WorkspaceMember[]
   activities     AssetActivity[]
+  aiActionPlans  AiActionPlan[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   ownedWorkspaces Workspace[]      @relation("WorkspaceOwner")
@@ -37,13 +38,14 @@ model User {
 
 model Workspace {
   id          String            @id @default(cuid())
-  name        String
+  name        String            @unique
   ownerId     String?
   owner       User?             @relation("WorkspaceOwner", fields: [ownerId], references: [id])
   members     WorkspaceMember[]
   assets      Asset[]
   people      Person[]
   activities  AssetActivity[]
+  aiActionPlans AiActionPlan[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 }
@@ -79,15 +81,18 @@ model Asset {
   id            String        @id @default(cuid())
   assetTag      String
   serialNumber  String?
+  imeiNumber    String?
+  deviceSpec    String?
+  accessories   String?
   category      String?
   brand         String?
   model         String?
   status        AssetStatus   @default(IN_STOCK)
   location      String?
-  vendor        String?
   purchaseDate  DateTime?
   warrantyEnd   DateTime?
   notes         String?
+  deletedAt     DateTime?
   workspaceId   String
   workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   assignedToId  String?
@@ -99,6 +104,28 @@ model Asset {
   @@unique([workspaceId, assetTag])
   @@index([workspaceId, status])
   @@index([workspaceId, assignedToId])
+}
+
+enum AiPlanStatus {
+  PENDING
+  EXECUTED
+  CANCELLED
+}
+
+model AiActionPlan {
+  id              String       @id @default(cuid())
+  workspaceId     String
+  userId          String
+  planJson        Json
+  previewJson     Json
+  status          AiPlanStatus @default(PENDING)
+  requiresConfirmation Boolean  @default(false)
+  confirmationText String?
+  expiresAt       DateTime
+  createdAt       DateTime     @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model AssetActivity {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { deleteAsset, getAsset, updateAsset } from "@/lib/assets";
 import { prisma } from "@/lib/prisma";
 import { assetInputSchema } from "@/lib/validators";

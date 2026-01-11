@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { listAssets, createAsset } from "@/lib/assets";
 import { assetInputSchema } from "@/lib/validators";
 import { getWorkspaceMembership } from "@/lib/workspaces";
@@ -28,6 +28,9 @@ export async function GET(request: Request) {
     .flatMap((s) => s.split(","))
     .map((s) => s.trim().toUpperCase())
     .filter((s) => Object.values(AssetStatus).includes(s as AssetStatus)) as AssetStatus[];
+  const warrantyExpiringInDays = searchParams.get("warrantyExpiringInDays");
+  const purchasedWithinDays = searchParams.get("purchasedWithinDays");
+  const limit = searchParams.get("limit");
 
   const assets = await listAssets(workspaceId, {
     q: searchParams.get("q") ?? undefined,
@@ -35,11 +38,13 @@ export async function GET(request: Request) {
     brand: searchParams.get("brand") ?? undefined,
     model: searchParams.get("model") ?? undefined,
     location: searchParams.get("location") ?? undefined,
-    vendor: searchParams.get("vendor") ?? undefined,
     assignedTo: searchParams.get("assignedTo") ?? undefined,
     status: status.length ? status : undefined,
     sort: (searchParams.get("sort") as any) ?? undefined,
     direction: (searchParams.get("direction") as any) ?? undefined,
+    warrantyExpiringInDays: warrantyExpiringInDays ? Number(warrantyExpiringInDays) : undefined,
+    purchasedWithinDays: purchasedWithinDays ? Number(purchasedWithinDays) : undefined,
+    limit: limit ? Number(limit) : undefined,
   });
 
   return NextResponse.json(assets);

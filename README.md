@@ -40,7 +40,7 @@ npm run dev
 - Auth: credentials login with database-backed sessions.
 - Roles: `ADMIN`, `IT_STAFF`, `VIEWER` enforced server-side.
 - Workspace access: only members can access `/w/[id]/...`.
-- Assets: CRUD with fields (assetTag unique per workspace, serialNumber, category, brand, model, status, location, vendor, purchaseDate, warrantyEnd, assignedTo Person, notes).
+- Assets: CRUD with fields (assetTag unique per workspace, serialNumber, category, brand, model, status, location, purchaseDate, warrantyEnd, assignedTo Person, notes).
 - Views:
   - `/w/[id]/assets` – table with search/filter/sort and AI-assisted filter input.
   - `/w/[id]/assets/board` – kanban by status.

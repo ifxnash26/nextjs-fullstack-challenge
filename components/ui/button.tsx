@@ -13,19 +13,39 @@ const variants: Record<string, string> = {
   link: "underline-offset-4 hover:underline text-primary",
 };
 
+const sizes: Record<string, string> = {
+  default: "h-10 px-4",
+  sm: "h-9 px-3 text-sm",
+  lg: "h-11 px-5 text-base",
+  icon: "h-10 w-10 p-0",
+};
+
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: keyof typeof variants;
+  size?: keyof typeof sizes;
+  asChild?: boolean;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", type = "button", ...props }, ref) => {
+  ({ className, variant = "default", size = "default", type = "button", asChild = false, children, ...props }, ref) => {
+    const classes = cn(base, variants[variant], sizes[size] ?? sizes.default, className);
+
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children, {
+        className: cn(classes, (children.props as any)?.className),
+        ref,
+      } as any);
+    }
+
     return (
       <button
-        className={cn(base, variants[variant], className)}
+        className={classes}
         type={type}
         ref={ref}
         {...props}
-      />
+      >
+        {children}
+      </button>
     );
   },
 );

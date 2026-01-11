@@ -9,7 +9,8 @@ import { getWorkspaceMembership } from "./workspaces";
 function buildAssetWhere(workspaceId: string, filters: AssetFilterInput) {
   const parsed = assetFilterSchema.safeParse(filters);
   const data = parsed.success ? parsed.data : {};
-  const where: any = { workspaceId };
+  const where: any = { workspaceId, deletedAt: null };
+  const now = new Date();
 
   if (data.status?.length) {
     where.status = { in: data.status };
@@ -23,9 +24,23 @@ function buildAssetWhere(workspaceId: string, filters: AssetFilterInput) {
   if (data.brand) where.brand = { contains: data.brand, mode: "insensitive" };
   if (data.model) where.model = { contains: data.model, mode: "insensitive" };
   if (data.location) where.location = { contains: data.location, mode: "insensitive" };
-  if (data.vendor) where.vendor = { contains: data.vendor, mode: "insensitive" };
   if (data.assignedTo) {
     where.assignedTo = { name: { contains: data.assignedTo, mode: "insensitive" } };
+  }
+
+  if (data.warrantyExpiringInDays) {
+    const expiresBefore = new Date(now);
+    expiresBefore.setDate(now.getDate() + data.warrantyExpiringInDays);
+    where.warrantyEnd = {
+      gte: now,
+      lte: expiresBefore,
+    };
+  }
+
+  if (data.purchasedWithinDays) {
+    const purchasedAfter = new Date(now);
+    purchasedAfter.setDate(now.getDate() - data.purchasedWithinDays);
+    where.purchaseDate = { gte: purchasedAfter };
   }
 
   if (data.q) {
@@ -47,10 +62,12 @@ export async function listAssets(workspaceId: string, filters: AssetFilterInput)
   const orderBy = data.sort
     ? { [data.sort]: data.direction ?? "desc" }
     : { updatedAt: "desc" as const };
+  const take = data.limit ? Math.min(Math.max(data.limit, 1), 200) : undefined;
 
   return prisma.asset.findMany({
     where,
     orderBy,
+    take,
     include: {
       assignedTo: true,
       activities: { orderBy: { createdAt: "desc" }, take: 5 },
@@ -60,7 +77,7 @@ export async function listAssets(workspaceId: string, filters: AssetFilterInput)
 
 export async function getAsset(workspaceId: string, assetId: string) {
   return prisma.asset.findFirst({
-    where: { id: assetId, workspaceId },
+    where: { id: assetId, workspaceId, deletedAt: null },
     include: {
       assignedTo: true,
       activities: { orderBy: { createdAt: "desc" }, take: 15, include: { user: true } },
@@ -163,8 +180,9 @@ export async function deleteAsset(workspaceId: string, userId: string, assetId: 
     throw new Error("Only admins can delete assets");
   }
 
-  const asset = await prisma.asset.delete({
+  const asset = await prisma.asset.update({
     where: { id: assetId },
+    data: { deletedAt: new Date() },
   });
   return asset;
 }
@@ -187,7 +205,7 @@ export async function previewAssetsForUpdate(workspaceId: string, filters: Asset
 export async function findExistingAssetTags(workspaceId: string, tags: string[]) {
   if (!tags.length) return [];
   const existing = await prisma.asset.findMany({
-    where: { workspaceId, assetTag: { in: tags } },
+    where: { workspaceId, assetTag: { in: tags }, deletedAt: null },
     select: { assetTag: true },
   });
   return existing.map((asset) => asset.assetTag);
@@ -293,9 +311,11 @@ export async function importAssetsFromCsv(workspaceId: string, userId: string, c
       model: record.model || undefined,
       status: (record.status?.toUpperCase() as AssetStatus) || AssetStatus.IN_STOCK,
       location: record.location || undefined,
-      vendor: record.vendor || undefined,
       purchaseDate: record.purchaseDate ? new Date(record.purchaseDate) : undefined,
       warrantyEnd: record.warrantyEnd ? new Date(record.warrantyEnd) : undefined,
+      imeiNumber: record.imeiNumber || undefined,
+      deviceSpec: record.deviceSpec || undefined,
+      accessories: record.accessories || undefined,
       notes: record.notes || undefined,
       assignedToId: undefined,
     };
@@ -344,9 +364,11 @@ export async function exportAssetsToCsv(workspaceId: string, filters: AssetFilte
       "model",
       "status",
       "location",
-      "vendor",
       "purchaseDate",
       "warrantyEnd",
+      "imeiNumber",
+      "deviceSpec",
+      "accessories",
       "notes",
       "assignedTo.name",
     ],
@@ -357,6 +379,9 @@ export async function exportAssetsToCsv(workspaceId: string, filters: AssetFilte
     purchaseDate: asset.purchaseDate ? asset.purchaseDate.toISOString().split("T")[0] : "",
     warrantyEnd: asset.warrantyEnd ? asset.warrantyEnd.toISOString().split("T")[0] : "",
     "assignedTo.name": asset.assignedTo?.name ?? "",
+    imeiNumber: (asset as any).imeiNumber ?? "",
+    deviceSpec: (asset as any).deviceSpec ?? "",
+    accessories: (asset as any).accessories ?? "",
   }));
 
   return parser.parse(data);

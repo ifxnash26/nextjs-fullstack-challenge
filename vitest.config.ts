@@ -9,8 +9,9 @@ export default defineConfig({
     include: ["tests/**/*.{ts,tsx}"],
   },
   resolve: {
-    alias: {
-      "@": path.resolve(fileURLToPath(new URL(".", import.meta.url))),
-    },
+    alias: [
+      { find: "@/server", replacement: path.resolve(fileURLToPath(new URL("./src/server", import.meta.url))) },
+      { find: "@", replacement: path.resolve(fileURLToPath(new URL(".", import.meta.url))) },
+    ],
   },
 });

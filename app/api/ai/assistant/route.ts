@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import { z } from "zod";
 import { AssetStatus } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -39,8 +39,9 @@ function hasFilterCriteria(filters: AssetFilterInput) {
       (filters.assetTags && filters.assetTags.length) ||
       filters.category ||
       filters.location ||
-      filters.vendor ||
       filters.assignedTo ||
+      filters.purchasedWithinDays ||
+      filters.warrantyExpiringInDays ||
       (filters.status && filters.status.length),
   );
 }
@@ -96,12 +97,11 @@ export async function POST(request: Request) {
       const assets = tags.map((tag) => ({
         assetTag: tag,
         category: create.category || undefined,
-        status: create.status,
+        status: create.status ?? AssetStatus.IN_STOCK,
         serialNumber: undefined,
         brand: undefined,
         model: undefined,
         location: undefined,
-        vendor: undefined,
         purchaseDate: undefined,
         warrantyEnd: undefined,
         notes: undefined,

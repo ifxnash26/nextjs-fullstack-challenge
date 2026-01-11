@@ -23,7 +23,7 @@ export async function getAssistantIntentFromModel(text: string): Promise<ModelIn
 You are an intent parser for an IT asset manager. Return ONLY JSON with no extra text.
 Schema:
 - intent: "filter" | "update" | "create" | "delete"
-- spec: { search?: string; assetTags?: string[]; statuses?: string[]; category?: string; location?: string; vendor?: string; assignedTo?: string }
+  - spec: { search?: string; assetTags?: string[]; statuses?: string[]; category?: string; location?: string; assignedTo?: string }
 - update: { status?: string; category?: string; assignedTo?: string }
 - create: { count: number; tagPrefix: string; tagStart: number; tagWidth: number; category?: string; status?: string }
 Rules:

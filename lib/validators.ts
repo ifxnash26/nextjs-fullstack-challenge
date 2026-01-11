@@ -12,12 +12,14 @@ export const credentialsSchema = z.object({
 export const assetInputSchema = z.object({
   assetTag: z.string().min(1).trim(),
   serialNumber: z.string().optional(),
+  imeiNumber: z.string().optional(),
+  deviceSpec: z.string().optional(),
+  accessories: z.string().optional(),
   category: z.string().optional(),
   brand: z.string().optional(),
   model: z.string().optional(),
   status: z.nativeEnum(AssetStatus).default(AssetStatus.IN_STOCK),
   location: z.string().optional(),
-  vendor: z.string().optional(),
   purchaseDate: z.coerce.date().optional(),
   warrantyEnd: z.coerce.date().optional(),
   assignedToId: z.string().optional().nullable(),
@@ -37,20 +39,12 @@ export const assetFilterSchema = z.object({
   brand: z.string().optional(),
   model: z.string().optional(),
   location: z.string().optional(),
-  vendor: z.string().optional(),
   assignedTo: z.string().optional(),
-  sort: z.enum(["createdAt", "purchaseDate", "warrantyEnd", "assetTag"]).optional(),
+  purchasedWithinDays: z.coerce.number().int().min(1).max(3650).optional(),
+  warrantyExpiringInDays: z.coerce.number().int().min(1).max(365).optional(),
+  limit: z.coerce.number().int().min(10).max(200).optional(),
+  sort: z.enum(["updatedAt", "createdAt", "purchaseDate", "warrantyEnd", "assetTag"]).optional(),
   direction: z.enum(["asc", "desc"]).optional(),
-});
-
-export const filterSpecSchema = z.object({
-  statuses: z.array(z.nativeEnum(AssetStatus)).optional(),
-  search: z.string().optional(),
-  assetTags: z.array(z.string()).optional(),
-  category: z.string().optional(),
-  location: z.string().optional(),
-  vendor: z.string().optional(),
-  assignedTo: z.string().optional(),
 });
 
 export const workspaceNameSchema = z.object({
@@ -67,4 +61,5 @@ export const userCreateSchema = z.object({
 export type AssetInput = z.infer<typeof assetInputSchema>;
 export type AssetUpdateInput = z.infer<typeof assetUpdateSchema>;
 export type AssetFilterInput = z.infer<typeof assetFilterSchema>;
-export type FilterSpec = z.infer<typeof filterSpecSchema>;
+export { filterSpecSchema } from "@/server/ai/filterSpec";
+export type { FilterSpec } from "@/server/ai/filterSpec";

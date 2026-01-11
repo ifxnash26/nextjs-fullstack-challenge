@@ -1,91 +1,128 @@
 "use client";
 
+import { FormEvent, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { FilterSpec } from "@/lib/validators";
+import { Direction, SortBy, Status } from "@/server/ai/filterSpec";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Alert } from "@/components/ui/alert";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
-import type { CreateSpec } from "@/lib/ai";
-import type { FilterSpec } from "@/lib/validators";
 
-type PendingUpdate = {
-  spec: FilterSpec;
-  update: { status?: string; category?: string; assignedTo?: string; location?: string };
-  count: number;
-  sample?: { assetTag: string; status: string }[];
+type AiFilterState = {
+  interpretedQuery: string;
+  filterSpec?: FilterSpec;
+  followUpQuestion?: string;
 };
 
-type PendingCreate = {
-  create: CreateSpec;
-  count: number;
-  range?: { start: string; end: string };
-  sample?: string[];
+const statusLabels: Record<string, string> = {
+  IN_STOCK: "In stock",
+  ASSIGNED: "Assigned",
+  REPAIR: "Repair",
+  RETIRED: "Retired",
 };
 
-type PendingDelete = {
-  spec: FilterSpec;
-  count: number;
-  sample?: { assetTag: string; status: string }[];
-};
+function mapSortToSortBy(value: string | null): SortBy | undefined {
+  switch (value) {
+    case "updatedAt":
+      return SortBy.UPDATED;
+    case "createdAt":
+      return SortBy.CREATED;
+    case "warrantyEnd":
+      return SortBy.WARRANTY_END;
+    case "purchaseDate":
+      return SortBy.PURCHASE_DATE;
+    default:
+      return undefined;
+  }
+}
+
+function formatFilterSummary(spec: FilterSpec) {
+  const parts: string[] = [];
+  if (spec.search) parts.push(`Search: ${spec.search}`);
+  if (spec.category) parts.push(`Category: ${spec.category}`);
+  if (spec.location) parts.push(`Location: ${spec.location}`);
+  if (spec.assignedTo) parts.push(`Assigned to: ${spec.assignedTo}`);
+  if (spec.statuses?.length) {
+    parts.push(`Statuses: ${spec.statuses.map((status) => statusLabels[status] ?? status).join(", ")}`);
+  }
+  if (spec.warrantyExpiringInDays) parts.push(`Warranty in ${spec.warrantyExpiringInDays} days`);
+  if (spec.purchasedWithinDays) parts.push(`Purchased within ${spec.purchasedWithinDays} days`);
+  if (spec.sortBy) parts.push(`Sort: ${spec.sortBy.toLowerCase().replace("_", " ")}`);
+  if (spec.direction) parts.push(`Direction: ${spec.direction.toLowerCase()}`);
+  return parts.join(" | ");
+}
 
 export function AskAiFilter({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [prompt, setPrompt] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  const [aiResult, setAiResult] = useState<AiFilterState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [applyingFilter, setApplyingFilter] = useState(false);
-  const [applyingDelete, setApplyingDelete] = useState(false);
-  const [pendingFilter, setPendingFilter] = useState<FilterSpec | null>(null);
-  const [pendingUpdate, setPendingUpdate] = useState<PendingUpdate | null>(null);
-  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
-  const busy = loading || applying || creating || applyingFilter || applyingDelete;
+  const [undoQuery, setUndoQuery] = useState<string | null>(null);
 
-  const formatStatus = (value: string) =>
-    value
-      .toLowerCase()
-      .split("_")
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
+  const currentFilter = useMemo(() => {
+    const statuses = searchParams
+      .getAll("status")
+      .flatMap((value) => value.split(","))
+      .map((value) => value.toUpperCase())
+      .filter((value) => Object.values(Status).includes(value as Status)) as Status[];
 
-  const formatLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1);
-  const formatName = (value: string) =>
-    value
-      .split(" ")
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-      .join(" ");
+    const asNumber = (key: string) => {
+      const value = searchParams.get(key);
+      if (!value) return undefined;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
 
-  const formatUpdateSummary = (update: PendingUpdate["update"]) => {
-    const parts: string[] = [];
-    if (update.status) parts.push(`Status: ${formatStatus(update.status)}`);
-    if (update.category) parts.push(`Category: ${formatLabel(update.category)}`);
-    if (update.assignedTo) parts.push(`Assign to: ${formatName(update.assignedTo)}`);
-    if (update.location) parts.push(`Location: ${formatLabel(update.location)}`);
-    return parts.join(" | ");
-  };
+    const spec: Partial<FilterSpec> = {};
+    const search = searchParams.get("q");
+    if (search) spec.search = search;
+    const category = searchParams.get("category");
+    if (category) spec.category = category;
+    const location = searchParams.get("location");
+    if (location) spec.location = location;
+    const assignedTo = searchParams.get("assignedTo");
+    if (assignedTo) spec.assignedTo = assignedTo;
+    if (statuses.length) spec.statuses = statuses;
 
-  const updateSummary = pendingUpdate ? formatUpdateSummary(pendingUpdate.update) : "";
+    const sortParam = searchParams.get("sort");
+    const sortBy = mapSortToSortBy(sortParam);
+    if (sortBy) spec.sortBy = sortBy;
 
-  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+    const direction = searchParams.get("direction");
+    if (direction) spec.direction = direction.toUpperCase() as Direction;
+
+    const warrantyExpiringInDays = asNumber("warrantyExpiringInDays");
+    if (warrantyExpiringInDays) spec.warrantyExpiringInDays = warrantyExpiringInDays;
+
+    const purchasedWithinDays = asNumber("purchasedWithinDays");
+    if (purchasedWithinDays) spec.purchasedWithinDays = purchasedWithinDays;
+
+    const limit = asNumber("limit");
+    if (limit) spec.limit = limit;
+
+    return spec;
+  }, [searchParams]);
+
+  const busy = loading || applying;
+
+  const sendPrompt = async (text: string) => {
     setLoading(true);
     setError(null);
     setMessage(null);
-    setPendingFilter(null);
-    setPendingUpdate(null);
-    setPendingCreate(null);
-    setPendingDelete(null);
 
-    const form = new FormData(event.currentTarget);
-    const text = String(form.get("prompt") || "");
-    const res = await fetch("/api/ai/assistant", {
+    const res = await fetch("/api/ai/filter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, workspaceId }),
+      body: JSON.stringify({
+        message: text,
+        workspaceId,
+        currentFilter: aiResult?.filterSpec ?? currentFilter,
+      }),
     });
 
     if (!res.ok) {
@@ -95,303 +132,142 @@ export function AskAiFilter({ workspaceId }: { workspaceId: string }) {
       return;
     }
 
-    const result = await res.json();
-    if (result.intent === "filter") {
-      setPendingFilter(result.spec);
-      setLoading(false);
-      return;
-    }
-
-    if (result.intent === "delete") {
-      setPendingDelete({
-        spec: result.spec,
-        count: result.count,
-        sample: result.sample,
-      });
-      setLoading(false);
-      return;
-    }
-
-    if (result.intent === "update") {
-      setPendingUpdate({
-        spec: result.spec,
-        update: result.update,
-        count: result.count,
-        sample: result.sample,
-      });
-      setLoading(false);
-      return;
-    }
-
-    if (result.intent === "create") {
-      setPendingCreate({
-        create: result.create,
-        count: result.count,
-        range: result.range,
-        sample: result.sample,
-      });
-      setLoading(false);
-      return;
-    }
-
-    if (result.intent === "unknown") {
-      setError(result.message || "Could not process that request.");
-      setLoading(false);
-      return;
-    }
-
-    const spec = result.spec;
-    setPendingFilter(spec);
+    const payload = (await res.json()) as AiFilterState;
+    setAiResult(payload);
+    setPrompt("");
     setLoading(false);
   };
 
-  const onApplyUpdate = async () => {
-    if (!pendingUpdate) return;
-    setApplying(true);
-    setError(null);
-    setMessage(null);
-
-    const res = await fetch("/api/ai/assistant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId,
-        apply: true,
-        spec: pendingUpdate.spec,
-        update: pendingUpdate.update,
-      }),
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      setError(payload.error || "Could not apply that update.");
-      setApplying(false);
-      return;
-    }
-
-    const payload = await res.json();
-    setPendingUpdate(null);
-    setPendingFilter(null);
-    setPendingDelete(null);
-    setPendingCreate(null);
-    setApplying(false);
-    setMessage(`Updated ${payload.updatedCount ?? 0} assets.`);
-    router.refresh();
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await sendPrompt(prompt);
   };
 
-  const onApplyCreate = async () => {
-    if (!pendingCreate) return;
-    setCreating(true);
-    setError(null);
-    setMessage(null);
-
-    const res = await fetch("/api/ai/assistant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId,
-        apply: true,
-        create: pendingCreate.create,
-      }),
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      setError(payload.error || "Could not create those assets.");
-      setCreating(false);
-      return;
-    }
-
-    const payload = await res.json();
-    setPendingCreate(null);
-    setPendingFilter(null);
-    setPendingUpdate(null);
-    setPendingDelete(null);
-    setCreating(false);
-    setMessage(`Created ${payload.createdCount ?? 0} assets.`);
-    router.refresh();
+  const onFollowUp = async () => {
+    if (!followUp.trim()) return;
+    await sendPrompt(followUp);
+    setFollowUp("");
   };
 
-  const onApplyFilter = async () => {
-    if (!pendingFilter) return;
-    setApplyingFilter(true);
-    setError(null);
-    setMessage(null);
-
+  const applyFilterSpec = (spec: FilterSpec) => {
     const params = new URLSearchParams(searchParams.toString());
+    const keysToClear = [
+      "q",
+    "category",
+    "location",
+    "assignedTo",
+      "sort",
+      "direction",
+      "warrantyExpiringInDays",
+      "purchasedWithinDays",
+      "limit",
+    ];
+    keysToClear.forEach((key) => params.delete(key));
     params.delete("status");
 
-    if (pendingFilter.search) params.set("q", pendingFilter.search);
-    if (pendingFilter.vendor) params.set("vendor", pendingFilter.vendor);
-    if (pendingFilter.location) params.set("location", pendingFilter.location);
-    if (pendingFilter.category) params.set("category", pendingFilter.category);
-    if (pendingFilter.assignedTo) params.set("assignedTo", pendingFilter.assignedTo);
-    if (pendingFilter.statuses?.length) {
-      pendingFilter.statuses.forEach((status: string) => params.append("status", status));
+    if (spec.search) params.set("q", spec.search);
+    if (spec.category) params.set("category", spec.category);
+    if (spec.location) params.set("location", spec.location);
+    if (spec.assignedTo) params.set("assignedTo", spec.assignedTo);
+    if (spec.statuses?.length) spec.statuses.forEach((status) => params.append("status", status));
+    if (spec.sortBy) {
+      const sortMap: Record<SortBy, string> = {
+        [SortBy.UPDATED]: "updatedAt",
+        [SortBy.CREATED]: "createdAt",
+        [SortBy.WARRANTY_END]: "warrantyEnd",
+        [SortBy.PURCHASE_DATE]: "purchaseDate",
+      };
+      params.set("sort", sortMap[spec.sortBy]);
     }
+    if (spec.direction) params.set("direction", spec.direction.toLowerCase());
+    if (spec.warrantyExpiringInDays) params.set("warrantyExpiringInDays", spec.warrantyExpiringInDays.toString());
+    if (spec.purchasedWithinDays) params.set("purchasedWithinDays", spec.purchasedWithinDays.toString());
+    if (spec.limit) params.set("limit", spec.limit.toString());
 
-    setApplyingFilter(false);
-    setPendingFilter(null);
-    setPendingDelete(null);
-    setPendingUpdate(null);
-    setPendingCreate(null);
-    router.push(`/w/${workspaceId}/assets?${params.toString()}`);
+    setUndoQuery(searchParams.toString());
+    router.push(`/w/${workspaceId}/assets${params.toString() ? `?${params.toString()}` : ""}`);
+    setMessage("Filter applied.");
   };
 
-  const formatFilterSummary = (spec: FilterSpec) => {
-    const parts: string[] = [];
-    if (spec.search) parts.push(`Search: ${spec.search}`);
-    if (spec.vendor) parts.push(`Vendor: ${formatLabel(spec.vendor)}`);
-    if (spec.location) parts.push(`Location: ${formatLabel(spec.location)}`);
-    if (spec.category) parts.push(`Category: ${formatLabel(spec.category)}`);
-    if (spec.assignedTo) parts.push(`Assigned to: ${formatName(spec.assignedTo)}`);
-    if (spec.statuses?.length) parts.push(`Statuses: ${spec.statuses.map(formatStatus).join(", ")}`);
-    return parts.join(" | ");
+  const onApplyFilter = () => {
+    if (!aiResult?.filterSpec) return;
+    setApplying(true);
+    applyFilterSpec(aiResult.filterSpec);
+    setApplying(false);
   };
 
-  const onApplyDelete = async () => {
-    if (!pendingDelete) return;
-    setApplyingDelete(true);
-    setError(null);
-    setMessage(null);
-
-    const res = await fetch("/api/ai/assistant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId,
-        apply: true,
-        delete: true,
-        spec: pendingDelete.spec,
-      }),
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      setError(payload.error || "Could not delete those assets.");
-      setApplyingDelete(false);
-      return;
-    }
-
-    const payload = await res.json();
-    setPendingDelete(null);
-    setPendingFilter(null);
-    setPendingUpdate(null);
-    setPendingCreate(null);
-    setApplyingDelete(false);
-    setMessage(`Deleted ${payload.deletedCount ?? 0} assets.`);
-    router.refresh();
+  const onUndo = () => {
+    const previous = undoQuery;
+    setUndoQuery(null);
+    setAiResult(null);
+    setMessage(previous ? "Reverted to your previous filter." : "Reverted to default filters.");
+    router.push(`/w/${workspaceId}/assets${previous ? `?${previous}` : ""}`);
   };
 
   return (
-    <div className="space-y-2 rounded-xl border border-dashed border-border p-4">
+    <div className="space-y-3 rounded-xl border border-dashed border-border p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">Ask AI to filter, update, or add assets</p>
+        <p className="text-sm font-medium text-foreground">Ask AI to build a filter</p>
         <span className="text-xs uppercase tracking-wide text-muted-foreground">Beta</span>
       </div>
       <form onSubmit={onSubmit} className="flex flex-col gap-3 md:flex-row">
         <Input
           name="prompt"
-          placeholder="e.g. change all ipads to assigned, or add 70 laptops with MYPC001"
+          placeholder="e.g. laptops in repair at HQ expiring warranty in 30 days"
           required
           className="flex-1"
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
         />
-        <Button type="submit" disabled={busy} className="min-w-[96px]">
-          {loading ? "Thinking..." : "Apply"}
+        <Button type="submit" disabled={busy} className="min-w-[124px]">
+          {loading ? "Thinking..." : "Generate filter"}
         </Button>
       </form>
-      {pendingUpdate ? (
-        <Alert variant="warning" className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p>
-              Ready to update {pendingUpdate.count} assets{updateSummary ? ` (${updateSummary}).` : "."}
-            </p>
-            {pendingUpdate.sample?.length ? (
-              <p className="text-xs text-amber-900/80">
-                Examples: {pendingUpdate.sample.map((item) => item.assetTag).join(", ")}
+
+      {aiResult?.filterSpec ? (
+        <Alert variant="warning" className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-semibold text-black">
+                {formatFilterSummary(aiResult.filterSpec) || aiResult.interpretedQuery}
               </p>
-            ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={onApplyFilter}
+                disabled={applying}
+                className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow hover:shadow-md transition"
+              >
+                {applying ? "Applying..." : "Apply filter"}
+              </Button>
+              <Button type="button" variant="ghost" onClick={onUndo} disabled={!undoQuery}>
+                Undo
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={onApplyUpdate} disabled={applying}>
-              {applying ? "Applying..." : "Apply update"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setPendingUpdate(null)} disabled={applying}>
-              Cancel
+        </Alert>
+      ) : null}
+
+      {aiResult?.followUpQuestion ? (
+        <Alert variant="warning" className="space-y-2">
+          <p className="text-sm font-medium text-foreground">{aiResult.followUpQuestion}</p>
+          <div className="flex flex-col gap-2 md:flex-row">
+            <Input
+              value={followUp}
+              onChange={(event) => setFollowUp(event.target.value)}
+              placeholder="Type your clarification..."
+            />
+            <Button type="button" onClick={onFollowUp} disabled={busy}>
+              {loading ? "Sending..." : "Send answer"}
             </Button>
           </div>
         </Alert>
       ) : null}
-      {pendingDelete ? (
-        <Alert variant="error" className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p>Delete {pendingDelete.count} assets?</p>
-            <p className="text-xs text-red-900/80">
-              {formatFilterSummary(pendingDelete.spec) || "No filter details provided."}
-            </p>
-            {pendingDelete.sample?.length ? (
-              <p className="text-xs text-red-900/80">Examples: {pendingDelete.sample.map((item) => item.assetTag).join(", ")}</p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="destructive" onClick={onApplyDelete} disabled={applyingDelete}>
-              {applyingDelete ? "Deleting..." : "Delete assets"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setPendingDelete(null)} disabled={applyingDelete}>
-              Cancel
-            </Button>
-          </div>
-        </Alert>
-      ) : null}
-      {pendingCreate ? (
-        <Alert variant="warning" className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p>
-              Ready to create {pendingCreate.count} assets
-              {pendingCreate.range ? ` (${pendingCreate.range.start} to ${pendingCreate.range.end})` : ""}.
-            </p>
-            {pendingCreate.create.category ? (
-              <p className="text-xs text-amber-900/80">Category: {pendingCreate.create.category}</p>
-            ) : null}
-            {pendingCreate.create.status ? (
-              <p className="text-xs text-amber-900/80">Status: {formatStatus(pendingCreate.create.status)}</p>
-            ) : null}
-            {pendingCreate.sample?.length ? (
-              <p className="text-xs text-amber-900/80">Examples: {pendingCreate.sample.join(", ")}</p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={onApplyCreate} disabled={creating}>
-          {creating ? "Creating..." : "Create assets"}
-        </Button>
-        <Button type="button" variant="ghost" onClick={() => setPendingCreate(null)} disabled={creating}>
-          Cancel
-        </Button>
-      </div>
-    </Alert>
-      ) : null}
-      {pendingFilter ? (
-        <Alert variant="warning" className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p>Apply this filter?</p>
-            <p className="text-xs text-amber-900/80">{formatFilterSummary(pendingFilter) || "No details provided."}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={onApplyFilter} disabled={applyingFilter}>
-              {applyingFilter ? "Applying..." : "Apply filter"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setPendingFilter(null)} disabled={applyingFilter}>
-              Cancel
-            </Button>
-          </div>
-        </Alert>
-      ) : null}
+
       {message ? <Alert variant="success">{message}</Alert> : null}
       {error ? <Alert variant="error">{error}</Alert> : null}
     </div>
   );
 }
-
-
-
 

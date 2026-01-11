@@ -17,7 +17,7 @@ async function createWorkspaceAction(formData: FormData) {
 
   const parsed = workspaceNameSchema.safeParse({ name: String(formData.get("name") || "") });
   if (!parsed.success) {
-    return { error: "Workspace name must be at least 2 characters." };
+    throw new Error("Workspace name must be at least 2 characters.");
   }
 
   const workspace = await createWorkspaceWithMembership(session.user.id, parsed.data.name);

@@ -1,10 +1,11 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
-import { NextAuthOptions, getServerSession } from "next-auth";
+import type { AuthOptions } from "next-auth";
+import { getServerSession } from "next-auth/next";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 
-export const authOptions: NextAuthOptions = {
+export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
@@ -48,16 +49,15 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   },
   callbacks: {
-    async session({ session, user }) {
+    async session({ session, user }: { session: any; user: any }) {
       const dbUser = user ?? (session.user?.email ? await prisma.user.findUnique({ where: { email: session.user.email } }) : null);
       if (session.user) {
         session.user.id = dbUser?.id ?? session.user.id;
-        // @ts-expect-error NextAuth user is augmented in next-auth.d.ts
-        session.user.role = dbUser?.role;
+        (session.user as any).role = dbUser?.role;
       }
       return session;
     },
   },
 };
 
-export const getCurrentSession = () => getServerSession(authOptions);
+export const getCurrentSession = (): Promise<import("next-auth").Session | null> => getServerSession(authOptions);

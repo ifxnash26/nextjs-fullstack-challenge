@@ -14,9 +14,13 @@ interface AssetClientModel {
   id: string;
   status: AssetStatusValue;
   assignedToId: string | null;
+  serialNumber: string | null;
+  imeiNumber?: string | null;
+  deviceSpec?: string | null;
+  accessories?: string | null;
+  brand?: string | null;
   category: string | null;
   location: string | null;
-  vendor: string | null;
   purchaseDate: string | null;
   warrantyEnd: string | null;
   notes: string | null;
@@ -41,13 +45,19 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
   const [formState, setFormState] = useState({
     status: asset.status as AssetStatusValue,
     assignedToId: asset.assignedToId ?? "",
+    serialNumber: asset.serialNumber ?? "",
+    imeiNumber: asset.imeiNumber ?? "",
+    deviceSpec: asset.deviceSpec ?? "",
+    accessories: asset.accessories ?? "",
+    brand: asset.brand ?? "",
     category: asset.category ?? "",
     location: asset.location ?? "",
-    vendor: asset.vendor ?? "",
     purchaseDate: asset.purchaseDate ?? "",
     warrantyEnd: asset.warrantyEnd ?? "",
     notes: asset.notes ?? "",
   });
+
+  const isIpad = (formState.category || asset.category || "").toLowerCase().includes("ipad");
 
   const updateField = (key: keyof typeof formState, value: string) => {
     setFormState((prev) => ({ ...prev, [key]: value }));
@@ -61,9 +71,13 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
     const payload = {
       status: formState.status,
       assignedToId: formState.assignedToId || null,
+      serialNumber: formState.serialNumber || undefined,
+      imeiNumber: formState.imeiNumber || undefined,
+      deviceSpec: formState.deviceSpec || undefined,
+      accessories: formState.accessories || undefined,
+      brand: formState.brand || undefined,
       category: formState.category || undefined,
       location: formState.location || undefined,
-      vendor: formState.vendor || undefined,
       purchaseDate: formState.purchaseDate ? formState.purchaseDate : undefined,
       warrantyEnd: formState.warrantyEnd ? formState.warrantyEnd : undefined,
       notes: formState.notes || undefined,
@@ -151,10 +165,30 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-foreground" htmlFor="vendor">
-            Vendor
+          <label className="text-sm font-medium text-foreground" htmlFor="serialNumber">
+            Serial number
           </label>
-          <Input id="vendor" name="vendor" value={formState.vendor} onChange={(e) => updateField("vendor", e.target.value)} disabled={!canEdit} />
+          <Input
+            id="serialNumber"
+            name="serialNumber"
+            value={formState.serialNumber}
+            onChange={(e) => updateField("serialNumber", e.target.value)}
+            disabled={!canEdit}
+            placeholder="e.g. SN-00123"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground" htmlFor="brand">
+            Brand
+          </label>
+          <Input
+            id="brand"
+            name="brand"
+            value={formState.brand}
+            onChange={(e) => updateField("brand", e.target.value)}
+            disabled={!canEdit}
+            placeholder="e.g. Apple"
+          />
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground" htmlFor="purchaseDate">
@@ -183,6 +217,49 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
           />
         </div>
       </div>
+      {isIpad ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground" htmlFor="imeiNumber">
+              IMEI number
+            </label>
+            <Input
+              id="imeiNumber"
+              name="imeiNumber"
+              value={formState.imeiNumber}
+              onChange={(e) => updateField("imeiNumber", e.target.value)}
+              disabled={!canEdit}
+              placeholder="IMEI (for iPad)"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground" htmlFor="deviceSpec">
+              Device spec (iPad)
+            </label>
+            <Input
+              id="deviceSpec"
+              name="deviceSpec"
+              value={formState.deviceSpec}
+              onChange={(e) => updateField("deviceSpec", e.target.value)}
+              disabled={!canEdit}
+              placeholder="e.g. 256GB, Wi-Fi + Cellular"
+            />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="accessories">
+              Accessories (iPad)
+            </label>
+            <Input
+              id="accessories"
+              name="accessories"
+              value={formState.accessories}
+              onChange={(e) => updateField("accessories", e.target.value)}
+              disabled={!canEdit}
+              placeholder="e.g. Pencil, keyboard case"
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-foreground" htmlFor="notes">
           Notes
@@ -200,8 +277,8 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
       {canEdit ? (
         <Button
           type="submit"
-          variant="outline"
-          className="border-border bg-background text-foreground shadow-sm transition hover:bg-muted"
+          variant="default"
+          className="h-11 rounded-full px-5 font-semibold shadow-md transition hover:shadow-lg"
           disabled={loading}
         >
           {loading ? "Saving..." : "Save changes"}
@@ -212,3 +289,4 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
     </form>
   );
 }
+
