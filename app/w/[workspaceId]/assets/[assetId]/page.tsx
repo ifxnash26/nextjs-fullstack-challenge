@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { type AssetStatusValue } from "@/lib/constants";
+import { AiWorkspace } from "@/components/ai-workspace";
 
 function formatAssetTag(tag: string) {
   return tag.toUpperCase();
@@ -112,9 +113,13 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
     id: asset.id,
     status: asset.status as AssetStatusValue,
     assignedToId: asset.assignedToId ?? null,
+    serialNumber: asset.serialNumber ?? null,
+    imeiNumber: (asset as any).imeiNumber ?? null,
+    deviceSpec: (asset as any).deviceSpec ?? null,
+    accessories: (asset as any).accessories ?? null,
+    brand: asset.brand ?? null,
     category: asset.category ?? null,
     location: asset.location ?? null,
-    vendor: asset.vendor ?? null,
     purchaseDate: asset.purchaseDate ? asset.purchaseDate.toISOString().split("T")[0] : null,
     warrantyEnd: asset.warrantyEnd ? asset.warrantyEnd.toISOString().split("T")[0] : null,
     notes: asset.notes ?? null,
@@ -124,6 +129,7 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
   const clientPeople = people.map((person) => ({ id: person.id, name: person.name }));
   const secondary = asset.model ?? asset.category;
   const secondaryLabel = asset.model ? secondary : formatCategoryLabel(secondary);
+  const showPrintHandoff = (asset.category ?? "").toLowerCase() === "ipad";
 
   return (
     <div className="space-y-6">
@@ -133,15 +139,25 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
           <h1 className="text-3xl font-semibold leading-tight text-foreground">{formatAssetTag(asset.assetTag)}</h1>
           <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
             <AssetStatusBadge status={asset.status} />
-            <span>{[asset.brand, secondaryLabel].filter(Boolean).join(" • ")}</span>
+            <span>{[asset.brand, secondaryLabel].filter(Boolean).join(" - ")}</span>
           </div>
         </div>
-        <Link
-          href={`/w/${params.workspaceId}/assets`}
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
-        >
-          Back to table
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {showPrintHandoff ? (
+            <Link
+              href={`/w/${params.workspaceId}/assets/${params.assetId}/handoff`}
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+            >
+              Print handoff
+            </Link>
+          ) : null}
+          <Link
+            href={`/w/${params.workspaceId}/assets`}
+            className="rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted"
+          >
+            Back to table
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -165,74 +181,10 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
             ) : (
               <p className="text-sm text-muted-foreground">No notes yet.</p>
             )}
-            <AssetSummaryButton assetId={asset.id} />
+            <AssetSummaryButton assetId={asset.id} workspaceId={params.workspaceId} />
           </CardContent>
         </Card>
       </div>
-
-      {canEdit ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Add User</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <form action={createPersonAction} className="grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
-              <input type="hidden" name="workspaceId" value={params.workspaceId} />
-              <input type="hidden" name="assetId" value={asset.id} />
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground" htmlFor="name">
-                  Name
-                </label>
-                <Input id="name" name="name" placeholder="Ada Lovelace" required />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground" htmlFor="email">
-                  Email
-                </label>
-                <Input id="email" name="email" type="email" placeholder="ada@example.com" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground" htmlFor="title">
-                  Title
-                </label>
-                <Input id="title" name="title" placeholder="IT Lead" />
-              </div>
-              <Button
-                type="submit"
-                variant="outline"
-                className="h-10 border-border bg-background text-foreground shadow-sm transition hover:bg-muted"
-              >
-                Add User
-              </Button>
-            </form>
-            <form action={bulkCreatePeopleAction} className="space-y-3">
-              <input type="hidden" name="workspaceId" value={params.workspaceId} />
-              <input type="hidden" name="assetId" value={asset.id} />
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground" htmlFor="people">
-                  Bulk add users
-                </label>
-                <Textarea
-                  id="people"
-                  name="people"
-                  rows={4}
-                  placeholder="Name, email, title&#10;Ada Lovelace, ada@example.com, IT Lead&#10;Grace Hopper, grace@example.com, Engineer"
-                />
-                <p className="text-xs text-muted-foreground">
-                  One user per line. Format: name, optional email, optional title. Existing names are updated.
-                </p>
-              </div>
-              <Button
-                type="submit"
-                variant="outline"
-                className="h-10 border-border bg-background text-foreground shadow-sm transition hover:bg-muted"
-              >
-                Add Users
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader>
@@ -245,15 +197,23 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
               <div>
                 <p className="text-sm font-medium text-foreground">{activity.action}</p>
                 <p className="text-xs text-muted-foreground">
-                  {activity.user?.email ?? "system"} • {format(activity.createdAt, "PPpp")}
+                  {activity.user?.email ?? "system"} - {format(activity.createdAt, "PPpp")}
                 </p>
               </div>
-              <span className="text-xs text-muted-foreground">{activity.workspaceId.slice(0, 6)}…</span>
+              <span className="text-xs text-muted-foreground">{activity.workspaceId.slice(0, 6)}...</span>
             </div>
           ))}
         </CardContent>
       </Card>
+
+      <AiWorkspace workspaceId={params.workspaceId} assetId={params.assetId} />
     </div>
   );
 }
+
+
+
+
+
+
 
