@@ -36,10 +36,14 @@ function label(type: AuditIssue["type"]) {
 }
 
 function buildFilters(searchParams: ReturnType<typeof useSearchParams>) {
+  const normalizeStatus = (value: string) => {
+    const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+    return normalized === "IN_USED" || normalized === "IN_USE" ? "ASSIGNED" : normalized;
+  };
   const statuses = searchParams
     .getAll("status")
     .flatMap((value) => value.split(","))
-    .map((value) => value.toUpperCase())
+    .map((value) => normalizeStatus(value))
     .filter((value) => Object.values(FilterStatus).includes(value as FilterStatus));
 
   const getString = (key: string) => {

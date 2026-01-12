@@ -39,7 +39,10 @@ export type FilterSpec = z.infer<typeof filterSpecSchema>;
 
 function normalizeEnumValue<T extends string>(value: unknown, enumValues: readonly T[]): T | undefined {
   if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toUpperCase().replace(/\s+/g, "_") as T;
+  let normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_") as T;
+  if ((normalized === ("IN_USED" as T) || normalized === ("IN_USE" as T)) && enumValues.includes("ASSIGNED" as T)) {
+    normalized = "ASSIGNED" as T;
+  }
   return enumValues.includes(normalized) ? normalized : undefined;
 }
 

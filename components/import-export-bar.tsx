@@ -35,14 +35,19 @@ export function ImportExportBar({ workspaceId, exportUrl }: Props) {
     });
 
     if (!res.ok) {
-      setError("Import failed");
+      const payload = await res.json().catch(() => ({}));
+      setError(payload.error || "Import failed");
       setLoading(false);
+      if (inputRef.current) inputRef.current.value = "";
       return;
     }
 
     const result = await res.json();
-    setMessage(`Imported ${result.count} rows`);
+    const created = Array.isArray(result.created) ? result.created.length : 0;
+    const updated = Array.isArray(result.updated) ? result.updated.length : 0;
+    setMessage(`Imported ${result.count} rows (${created} created, ${updated} updated)`);
     setLoading(false);
+    if (inputRef.current) inputRef.current.value = "";
     router.refresh();
   };
 

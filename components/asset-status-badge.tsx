@@ -1,5 +1,6 @@
 import { AssetStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
+import { getAssetStatusLabel } from "@/lib/constants";
 
 const colors: Record<AssetStatus, "info" | "success" | "warning" | "default"> = {
   [AssetStatus.IN_STOCK]: "info",
@@ -9,5 +10,5 @@ const colors: Record<AssetStatus, "info" | "success" | "warning" | "default"> = 
 };
 
 export function AssetStatusBadge({ status }: { status: AssetStatus }) {
-  return <Badge variant={colors[status]}>{status.replace("_", " ")}</Badge>;
+  return <Badge variant={colors[status]}>{getAssetStatusLabel(status)}</Badge>;
 }

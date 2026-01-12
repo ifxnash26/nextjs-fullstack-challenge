@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AiWorkspace } from "@/components/ai-workspace";
 import { getCurrentSession } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { getAssetStatusLabel } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import { canEditAssets, effectiveRole } from "@/lib/rbac";
 import { AssetStatus } from "@prisma/client";
@@ -21,8 +22,12 @@ function parseStatuses(searchParams: Record<string, string | string[] | undefine
   const raw = searchParams.status;
   if (!raw) return [];
   const values = Array.isArray(raw) ? raw : raw.split(",");
+  const normalizeStatus = (value: string) => {
+    const normalized = value.toString().trim().toUpperCase().replace(/[\s-]+/g, "_");
+    return normalized === "IN_USED" || normalized === "IN_USE" ? "ASSIGNED" : normalized;
+  };
   return values
-    .map((value) => value.toString().toUpperCase())
+    .map((value) => normalizeStatus(value))
     .filter((value) => Object.values(AssetStatus).includes(value as AssetStatus)) as AssetStatus[];
 }
 
@@ -174,7 +179,7 @@ export default async function AssetsPage({
             className={`rounded-lg border border-border/70 bg-card/80 bg-gradient-to-br ${statusGradients[status]} to-transparent px-3 py-2 shadow-sm`}
           >
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              {status.replace("_", " ")}
+              {getAssetStatusLabel(status)}
             </p>
             <p className="text-xl font-semibold leading-none text-foreground">{statusCounts[status] ?? 0}</p>
           </div>
@@ -217,7 +222,7 @@ export default async function AssetsPage({
                       defaultChecked={statusFilters.includes(status)}
                       className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                     />
-                    {status.replace("_", " ")}
+                    {getAssetStatusLabel(status)}
                   </label>
                 ))}
               </div>

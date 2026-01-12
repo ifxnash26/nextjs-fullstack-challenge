@@ -21,7 +21,7 @@ const aiResponseSchema = z.object({
 
 const statusKeywords: Record<Status, string[]> = {
   [Status.IN_STOCK]: ["in stock", "available", "inventory"],
-  [Status.ASSIGNED]: ["assigned", "in use", "checked out", "checked-out", "checkedout"],
+  [Status.ASSIGNED]: ["assigned", "in use", "in-use", "in_use", "in used", "checked out", "checked-out", "checkedout"],
   [Status.REPAIR]: ["repair", "in repair", "under repair", "fix", "fixing", "broken"],
   [Status.RETIRED]: ["retired", "decommissioned", "disposed"],
 };

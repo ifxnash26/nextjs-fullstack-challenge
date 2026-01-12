@@ -27,8 +27,11 @@ const prisma = new PrismaClient();
 
 function normalizeStatus(value?: string | null): AssetStatus | undefined {
   if (!value) return undefined;
-  const upper = value.toUpperCase().replace(/\s+/g, "_");
-  return Object.values(AssetStatus).includes(upper as AssetStatus) ? (upper as AssetStatus) : undefined;
+  const upper = value.toUpperCase().replace(/[\s-]+/g, "_");
+  const normalized = upper === "IN_USED" || upper === "IN_USE" ? "ASSIGNED" : upper;
+  return Object.values(AssetStatus).includes(normalized as AssetStatus)
+    ? (normalized as AssetStatus)
+    : undefined;
 }
 
 async function main() {
@@ -46,7 +49,8 @@ async function main() {
 
   let upserts = 0;
   for (const row of rows) {
-    if (!row.assetTag) continue;
+    const assetTag = row.assetTag?.trim().toUpperCase();
+    if (!assetTag) continue;
     const status = normalizeStatus(row.status) ?? AssetStatus.IN_STOCK;
 
     let assignedToId: string | undefined;
@@ -61,7 +65,7 @@ async function main() {
     }
 
     await prisma.asset.upsert({
-      where: { workspaceId_assetTag: { workspaceId, assetTag: row.assetTag } },
+      where: { workspaceId_assetTag: { workspaceId, assetTag } },
       update: {
         category: row.category || undefined,
         brand: row.brand || undefined,
@@ -79,7 +83,7 @@ async function main() {
       },
       create: {
         workspaceId,
-        assetTag: row.assetTag,
+        assetTag,
         category: row.category || undefined,
         brand: row.brand || undefined,
         model: row.model || undefined,

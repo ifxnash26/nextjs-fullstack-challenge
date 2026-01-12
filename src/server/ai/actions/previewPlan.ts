@@ -15,7 +15,32 @@ export type PlanPreview = {
 
 async function resolveSelection(workspaceId: string, action: ActionItem) {
   if ("assetIds" in action.selection) {
-    return action.selection.assetIds;
+    const rawIds = action.selection.assetIds ?? [];
+    const cleaned = Array.from(new Set(rawIds.map((id) => id.trim()).filter(Boolean)));
+    if (!cleaned.length) return [];
+
+    if (action.type === ActionType.CREATE_ASSET) {
+      return (action as any).limitOne ? cleaned.slice(0, 1) : cleaned;
+    }
+
+    const assets = await prisma.asset.findMany({
+      where: {
+        workspaceId,
+        deletedAt: null,
+        OR: [
+          { id: { in: cleaned } },
+          ...cleaned.map((tag) => ({ assetTag: { equals: tag, mode: "insensitive" as const } })),
+        ],
+      },
+      select: { id: true },
+      take: 500,
+    });
+
+    let ids = assets.map((asset) => asset.id);
+    if ((action as any).limitOne && ids.length > 1) {
+      ids = ids.slice(0, 1);
+    }
+    return ids;
   }
 
   const filters = filterSpecToAssetFilterInput(action.selection.filterSpec as any);

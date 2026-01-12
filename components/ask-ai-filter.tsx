@@ -65,10 +65,14 @@ export function AskAiFilter({ workspaceId }: { workspaceId: string }) {
   const [undoQuery, setUndoQuery] = useState<string | null>(null);
 
   const currentFilter = useMemo(() => {
+    const normalizeStatus = (value: string) => {
+      const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+      return normalized === "IN_USED" || normalized === "IN_USE" ? "ASSIGNED" : normalized;
+    };
     const statuses = searchParams
       .getAll("status")
       .flatMap((value) => value.split(","))
-      .map((value) => value.toUpperCase())
+      .map((value) => normalizeStatus(value))
       .filter((value) => Object.values(Status).includes(value as Status)) as Status[];
 
     const asNumber = (key: string) => {

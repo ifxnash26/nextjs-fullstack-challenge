@@ -8,8 +8,11 @@ const API_KEY = process.env.AI_API_KEY;
 
 function normalizeStatus(value?: string | null): AssetStatus | undefined {
   if (!value) return undefined;
-  const upper = value.toUpperCase().replace(/\s+/g, "_");
-  return Object.values(AssetStatus).includes(upper as AssetStatus) ? (upper as AssetStatus) : undefined;
+  const upper = value.toUpperCase().replace(/[\s-]+/g, "_");
+  const normalized = upper === "IN_USED" || upper === "IN_USE" ? "ASSIGNED" : upper;
+  return Object.values(AssetStatus).includes(normalized as AssetStatus)
+    ? (normalized as AssetStatus)
+    : undefined;
 }
 
 export function isAiEnabled() {

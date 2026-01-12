@@ -21,7 +21,16 @@ type PlanRecord = {
 
 function buildWhereFromSelection(workspaceId: string, selection: any) {
   if (selection.assetIds) {
-    return { workspaceId, id: { in: selection.assetIds }, deletedAt: null };
+    const cleaned = Array.from(new Set(selection.assetIds.map((id: string) => String(id).trim()).filter(Boolean)));
+    if (!cleaned.length) return { workspaceId, deletedAt: null };
+    return {
+      workspaceId,
+      deletedAt: null,
+      OR: [
+        { id: { in: cleaned } },
+        ...cleaned.map((tag: string) => ({ assetTag: { equals: tag, mode: "insensitive" as const } })),
+      ],
+    };
   }
   if (selection.filterSpec) {
     const filters = filterSpecToAssetFilterInput(selection.filterSpec);
@@ -88,7 +97,11 @@ async function applyUpdates(workspaceId: string, userId: string, action: any, ro
   for (const asset of scopedTargets) {
     const data: any = {};
     if (action.payload.status) {
-      data.status = action.payload.status;
+      const statusValue =
+        action.payload.status === "IN_USED" || action.payload.status === "IN_USE"
+          ? AssetStatus.ASSIGNED
+          : action.payload.status;
+      data.status = statusValue;
     } else if (action.type === ActionType.ASSIGN_ASSET) {
       data.status = AssetStatus.ASSIGNED;
     }

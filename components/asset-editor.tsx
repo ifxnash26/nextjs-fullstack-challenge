@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
-import { ASSET_STATUSES, type AssetStatusValue } from "@/lib/constants";
+import { ASSET_STATUSES, getAssetStatusLabel, type AssetStatusValue } from "@/lib/constants";
 
 interface AssetClientModel {
   id: string;
@@ -42,6 +42,8 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
   const [formState, setFormState] = useState({
     status: asset.status as AssetStatusValue,
     assignedToId: asset.assignedToId ?? "",
@@ -58,6 +60,24 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
   });
 
   const isIpad = (formState.category || asset.category || "").toLowerCase().includes("ipad");
+  const applyAssigneeFilter = () => {
+    setAssigneeFilter(assigneeSearch.trim());
+  };
+  const clearAssigneeFilter = () => {
+    setAssigneeSearch("");
+    setAssigneeFilter("");
+  };
+  const normalizedAssigneeFilter = assigneeFilter.trim().toLowerCase();
+  const filteredPeople = normalizedAssigneeFilter
+    ? people.filter((person) => person.name.toLowerCase().includes(normalizedAssigneeFilter))
+    : people;
+  const selectedPerson = formState.assignedToId
+    ? people.find((person) => person.id === formState.assignedToId)
+    : undefined;
+  const visiblePeople =
+    selectedPerson && !filteredPeople.some((person) => person.id === selectedPerson.id)
+      ? [selectedPerson, ...filteredPeople]
+      : filteredPeople;
 
   const updateField = (key: keyof typeof formState, value: string) => {
     setFormState((prev) => ({ ...prev, [key]: value }));
@@ -116,7 +136,7 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
           >
             {ASSET_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {status.replace("_", " ")}
+                {getAssetStatusLabel(status)}
               </option>
             ))}
           </Select>
@@ -125,6 +145,31 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
           <label className="text-sm font-medium text-foreground" htmlFor="assignee">
             Assigned to
           </label>
+          <div className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="assigneeSearch">
+              Search assignees
+            </label>
+            <Input
+              id="assigneeSearch"
+              value={assigneeSearch}
+              onChange={(e) => setAssigneeSearch(e.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyAssigneeFilter();
+                }
+              }}
+              placeholder="Search assignees..."
+            />
+            <Button type="button" variant="secondary" className="rounded-full px-4 text-sm" onClick={applyAssigneeFilter}>
+              Search
+            </Button>
+            {assigneeFilter ? (
+              <Button type="button" variant="ghost" className="rounded-full px-3 text-sm" onClick={clearAssigneeFilter}>
+                Clear
+              </Button>
+            ) : null}
+          </div>
           <Select
             id="assignee"
             name="assignee"
@@ -133,7 +178,7 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
             disabled={!canEdit}
           >
             <option value="">Unassigned</option>
-            {people.map((person) => (
+            {visiblePeople.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.name}
               </option>

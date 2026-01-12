@@ -20,6 +20,10 @@ const statusKeywords: Record<string, AssetStatus> = {
   stock: AssetStatus.IN_STOCK,
   assigned: AssetStatus.ASSIGNED,
   assign: AssetStatus.ASSIGNED,
+  "in use": AssetStatus.ASSIGNED,
+  "in-use": AssetStatus.ASSIGNED,
+  "in_use": AssetStatus.ASSIGNED,
+  "in used": AssetStatus.ASSIGNED,
   repair: AssetStatus.REPAIR,
   fixing: AssetStatus.REPAIR,
   retired: AssetStatus.RETIRED,
@@ -33,7 +37,10 @@ function detectStatus(text: string) {
 }
 
 function detectAssetTags(text: string) {
-  const matches = Array.from(text.matchAll(/\b([A-Z]{2,5}-?\d{3,6})\b/gi)).map((m) => m[1].toUpperCase());
+  const matches = Array.from(text.matchAll(/\b([A-Z0-9][A-Z0-9_-]{2,})\b/gi))
+    .map((match) => match[1])
+    .filter((token) => /[A-Z]/i.test(token) && /\d/.test(token))
+    .map((token) => token.toUpperCase());
   return Array.from(new Set(matches));
 }
 
@@ -265,6 +272,7 @@ Current filter: ${JSON.stringify(input.currentFilter ?? {})}
 function applyHints(plan: ActionPlan, message: string): ActionPlan {
   const limitHint = /\b(1|one|single|just one)\b/i.test(message);
   const assigneeHint = detectAssigneeName(message);
+  const assetTagHints = detectAssetTags(message);
 
   return {
     ...plan,
@@ -280,6 +288,13 @@ function applyHints(plan: ActionPlan, message: string): ActionPlan {
         !(next.payload as any).assignedToName
       ) {
         next.payload = { ...next.payload, assignedToName: assigneeHint };
+      }
+      if (
+        assetTagHints.length &&
+        !(next.selection as any).assetIds &&
+        (next.selection as any).filterSpec
+      ) {
+        next.selection = { assetIds: assetTagHints };
       }
       return next;
     }),

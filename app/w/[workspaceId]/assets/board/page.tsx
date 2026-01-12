@@ -2,6 +2,7 @@ import { AssetStatusBadge } from "@/components/asset-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentSession } from "@/lib/auth";
 import { listAssets } from "@/lib/assets";
+import { getAssetStatusLabel } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import { effectiveRole } from "@/lib/rbac";
 import { AssetStatus } from "@prisma/client";
@@ -54,7 +55,7 @@ export default async function AssetBoardPage({ params }: { params: { workspaceId
           <Card key={column.status} className="flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <AssetStatusBadge status={column.status} /> {column.status.replace("_", " ")}
+                <AssetStatusBadge status={column.status} /> {getAssetStatusLabel(column.status)}
               </CardTitle>
               <span className="text-sm text-muted-foreground">{column.items.length}</span>
             </CardHeader>

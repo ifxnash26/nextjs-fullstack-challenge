@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
-import { ASSET_STATUSES, type AssetStatusValue } from "@/lib/constants";
+import { ASSET_STATUSES, getAssetStatusLabel, type AssetStatusValue } from "@/lib/constants";
 
 export function CreateAssetForm({ workspaceId }: { workspaceId: string }) {
   const router = useRouter();
@@ -67,7 +67,7 @@ export function CreateAssetForm({ workspaceId }: { workspaceId: string }) {
           <Select id="status" name="status" defaultValue={ASSET_STATUSES[0]}>
             {ASSET_STATUSES.map((status) => (
               <option key={status} value={status}>
-                {status.replace("_", " ")}
+                {getAssetStatusLabel(status)}
               </option>
             ))}
           </Select>

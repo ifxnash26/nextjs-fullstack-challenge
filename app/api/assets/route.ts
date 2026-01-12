@@ -24,9 +24,13 @@ export async function GET(request: Request) {
   }
 
   const statusParam = searchParams.getAll("status");
+  const normalizeStatus = (value: string) => {
+    const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+    return normalized === "IN_USED" || normalized === "IN_USE" ? "ASSIGNED" : normalized;
+  };
   const status = statusParam
     .flatMap((s) => s.split(","))
-    .map((s) => s.trim().toUpperCase())
+    .map((s) => normalizeStatus(s))
     .filter((s) => Object.values(AssetStatus).includes(s as AssetStatus)) as AssetStatus[];
   const warrantyExpiringInDays = searchParams.get("warrantyExpiringInDays");
   const purchasedWithinDays = searchParams.get("purchasedWithinDays");

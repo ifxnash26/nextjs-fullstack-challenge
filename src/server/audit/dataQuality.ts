@@ -60,7 +60,7 @@ const suggestionMap: Record<AuditIssueType, string> = {
   WARRANTY_BEFORE_PURCHASE: "Fix purchase/warranty dates so warrantyEnd is after purchaseDate.",
   DUPLICATE_SERIAL: "Resolve duplicate serial numbers to ensure uniqueness.",
   DUPLICATE_ASSET_TAG: "Resolve duplicate asset tags to ensure uniqueness.",
-  ASSIGNED_WITHOUT_ASSIGNEE: "Assign these assets to a person or move them out of ASSIGNED status.",
+  ASSIGNED_WITHOUT_ASSIGNEE: "Assign these assets to a person or move them out of Assigned status.",
   MISSING_IMEI: "Add IMEI numbers for iPads to track devices accurately.",
   MISSING_DEVICE_SPEC: "Add device specs (storage/connectivity) for iPads.",
   MISSING_ACCESSORIES: "Add included accessories for iPads so kits can be tracked.",

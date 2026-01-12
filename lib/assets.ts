@@ -287,6 +287,37 @@ export async function bulkDeleteAssets(workspaceId: string, userId: string, filt
   return { count: deleted.length, deleted };
 }
 
+function normalizeCsvHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function buildCsvLookup(record: Record<string, string>) {
+  const lookup: Record<string, string> = {};
+  for (const [key, value] of Object.entries(record)) {
+    const normalizedKey = normalizeCsvHeader(key);
+    if (!normalizedKey) continue;
+    lookup[normalizedKey] = value;
+  }
+  return lookup;
+}
+
+function getCsvValue(lookup: Record<string, string>, candidates: string[]) {
+  for (const candidate of candidates) {
+    const value = lookup[normalizeCsvHeader(candidate)];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function normalizeAssetStatus(value?: string | null): AssetStatus | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const mapped = normalized === "IN_USED" || normalized === "IN_USE" ? "ASSIGNED" : normalized;
+  return Object.values(AssetStatus).includes(mapped as AssetStatus) ? (mapped as AssetStatus) : undefined;
+}
+
 export async function importAssetsFromCsv(workspaceId: string, userId: string, csvText: string) {
   const { role } = await getEffectiveRole(userId, workspaceId);
   if (!canEditAssets(role)) {
@@ -301,36 +332,96 @@ export async function importAssetsFromCsv(workspaceId: string, userId: string, c
 
   const created: string[] = [];
   const updated: string[] = [];
+  const errors: string[] = [];
+  const payloads: Array<{ payload: AssetInput; assignedToName?: string }> = [];
+  const seenTags = new Map<string, number>();
 
-  for (const record of records) {
+  records.forEach((record, index) => {
+    const row = index + 2;
+    const lookup = buildCsvLookup(record);
+    const assetTag = getCsvValue(lookup, ["assetTag", "asset tag", "asset_tag", "tag"]);
+
+    if (!assetTag) {
+      errors.push(`Row ${row}: assetTag is required.`);
+      return;
+    }
+    const normalizedTag = assetTag.trim().toUpperCase();
+    const duplicateRow = seenTags.get(normalizedTag);
+    if (duplicateRow) {
+      errors.push(`Row ${row}: duplicate assetTag "${normalizedTag}" (already in row ${duplicateRow}).`);
+      return;
+    }
+    seenTags.set(normalizedTag, row);
+
+    const rawStatus = getCsvValue(lookup, ["status", "state"]);
+    const parsedStatus = normalizeAssetStatus(rawStatus);
+    if (rawStatus && !parsedStatus) {
+      errors.push(`Row ${row}: invalid status "${rawStatus}".`);
+      return;
+    }
+    const status = parsedStatus ?? AssetStatus.IN_STOCK;
+
+    const rawPurchaseDate = getCsvValue(lookup, ["purchaseDate", "purchase date", "purchase_date"]);
+    const purchaseDate = rawPurchaseDate ? new Date(rawPurchaseDate) : undefined;
+    if (rawPurchaseDate && purchaseDate && Number.isNaN(purchaseDate.getTime())) {
+      errors.push(`Row ${row}: invalid purchaseDate "${rawPurchaseDate}".`);
+      return;
+    }
+
+    const rawWarrantyEnd = getCsvValue(lookup, ["warrantyEnd", "warranty end", "warranty_end"]);
+    const warrantyEnd = rawWarrantyEnd ? new Date(rawWarrantyEnd) : undefined;
+    if (rawWarrantyEnd && warrantyEnd && Number.isNaN(warrantyEnd.getTime())) {
+      errors.push(`Row ${row}: invalid warrantyEnd "${rawWarrantyEnd}".`);
+      return;
+    }
+
     const payload: AssetInput = {
-      assetTag: record.assetTag,
-      serialNumber: record.serialNumber || undefined,
-      category: record.category || undefined,
-      brand: record.brand || undefined,
-      model: record.model || undefined,
-      status: (record.status?.toUpperCase() as AssetStatus) || AssetStatus.IN_STOCK,
-      location: record.location || undefined,
-      purchaseDate: record.purchaseDate ? new Date(record.purchaseDate) : undefined,
-      warrantyEnd: record.warrantyEnd ? new Date(record.warrantyEnd) : undefined,
-      imeiNumber: record.imeiNumber || undefined,
-      deviceSpec: record.deviceSpec || undefined,
-      accessories: record.accessories || undefined,
-      notes: record.notes || undefined,
+      assetTag: normalizedTag,
+      serialNumber: getCsvValue(lookup, ["serialNumber", "serial number", "serial_number"]),
+      category: getCsvValue(lookup, ["category", "type"]),
+      brand: getCsvValue(lookup, ["brand", "make"]),
+      model: getCsvValue(lookup, ["model", "model name"]),
+      status,
+      location: getCsvValue(lookup, ["location", "site"]),
+      purchaseDate,
+      warrantyEnd,
+      imeiNumber: getCsvValue(lookup, ["imeiNumber", "imei number", "imei_number"]),
+      deviceSpec: getCsvValue(lookup, ["deviceSpec", "device spec", "device_spec"]),
+      accessories: getCsvValue(lookup, ["accessories", "accessory"]),
+      notes: getCsvValue(lookup, ["notes", "note"]),
       assignedToId: undefined,
     };
 
-    if (record.assignedTo) {
+    const assignedToName = getCsvValue(lookup, [
+      "assignedTo",
+      "assigned to",
+      "assigned_to",
+      "assignee",
+      "assignedTo.name",
+      "assignee name",
+    ]);
+
+    payloads.push({ payload, assignedToName });
+  });
+
+  if (errors.length) {
+    const summary = errors.slice(0, 5).join(" ");
+    const more = errors.length > 5 ? ` (and ${errors.length - 5} more)` : "";
+    throw new Error(`Import failed. ${summary}${more}`);
+  }
+
+  for (const { payload, assignedToName } of payloads) {
+    if (assignedToName) {
       const person = await prisma.person.upsert({
         where: {
           workspaceId_name: {
             workspaceId,
-            name: record.assignedTo,
+            name: assignedToName,
           },
         },
         create: {
           workspaceId,
-          name: record.assignedTo,
+          name: assignedToName,
         },
         update: {},
       });
@@ -338,10 +429,19 @@ export async function importAssetsFromCsv(workspaceId: string, userId: string, c
     }
 
     const existing = await prisma.asset.findFirst({
-      where: { workspaceId, assetTag: payload.assetTag },
+      where: { workspaceId, assetTag: { equals: payload.assetTag, mode: "insensitive" } },
     });
 
     if (existing) {
+      if (existing.deletedAt) {
+        await prisma.asset.update({
+          where: { id: existing.id },
+          data: { deletedAt: null },
+        });
+        await logActivity(existing.id, workspaceId, "Asset restored via import", userId, {
+          deletedAt: { before: existing.deletedAt, after: null },
+        });
+      }
       await updateAsset(workspaceId, userId, existing.id, payload);
       updated.push(payload.assetTag);
     } else {

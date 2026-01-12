@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AssetStatus" RENAME VALUE 'IN_USED' TO 'ASSIGNED';
