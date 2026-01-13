@@ -21,7 +21,13 @@ type PlanRecord = {
 
 function buildWhereFromSelection(workspaceId: string, selection: any) {
   if (selection.assetIds) {
-    const cleaned = Array.from(new Set(selection.assetIds.map((id: string) => String(id).trim()).filter(Boolean)));
+    const cleaned = Array.from(
+      new Set(
+        (Array.isArray(selection.assetIds) ? (selection.assetIds as unknown[]) : [])
+          .map((id: unknown) => String(id).trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
     if (!cleaned.length) return { workspaceId, deletedAt: null };
     return {
       workspaceId,

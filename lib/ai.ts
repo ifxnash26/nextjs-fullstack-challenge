@@ -92,9 +92,10 @@ function hasCreateVerb(text: string) {
 }
 
 function findStatusMatches(text: string) {
-  const matches = text.matchAll(createStatusRegex("g"));
+  const regex = createStatusRegex("g");
   const found: AssetStatus[] = [];
-  for (const match of matches) {
+  let match: RegExpExecArray | null = null;
+  while ((match = regex.exec(text)) !== null) {
     const keyword = match[0].toLowerCase();
     const status = statusKeywordToStatus[keyword];
     if (status) found.push(status);
