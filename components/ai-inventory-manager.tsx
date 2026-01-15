@@ -1,11 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import type { PlanPreview } from "@/server/ai/actions/previewPlan";
 
 export function AiInventoryManager({ workspaceId }: { workspaceId: string }) {
+  const router = useRouter();
   const [message, setMessage] = useState("");
   const [clarifying, setClarifying] = useState("");
   const [planId, setPlanId] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export function AiInventoryManager({ workspaceId }: { workspaceId: string }) {
       setSuccess(`Done. Affected ${payload.affectedCount} assets.`);
       setPreview(null);
       setPlanId(null);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Execution failed.");
     } finally {
@@ -112,7 +115,7 @@ export function AiInventoryManager({ workspaceId }: { workspaceId: string }) {
             {preview.actions.map((action, index) => (
               <div key={index} className="rounded-md border border-border bg-card p-3 shadow-sm">
                 <p className="text-sm font-semibold text-foreground">
-                  {action.type} — {action.affectedCount} assets
+                  {action.type} - {action.affectedCount} assets
                 </p>
                 {action.sample?.length ? (
                   <p className="text-xs text-muted-foreground">

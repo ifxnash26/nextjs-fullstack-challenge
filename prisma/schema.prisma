@@ -106,6 +106,7 @@ model Asset {
   @@index([workspaceId, assignedToId])
 }
 
+
 enum AiPlanStatus {
   PENDING
   EXECUTED

@@ -62,7 +62,7 @@ const suggestionMap: Record<AuditIssueType, string> = {
   DUPLICATE_ASSET_TAG: "Resolve duplicate asset tags to ensure uniqueness.",
   ASSIGNED_WITHOUT_ASSIGNEE: "Assign these assets to a person or move them out of Assigned status.",
   MISSING_IMEI: "Add IMEI numbers for iPads to track devices accurately.",
-  MISSING_DEVICE_SPEC: "Add device specs (storage/connectivity) for iPads.",
+  MISSING_DEVICE_SPEC: "Add device specs (storage/RAM/connectivity) for iPads and laptops.",
   MISSING_ACCESSORIES: "Add included accessories for iPads so kits can be tracked.",
 };
 
@@ -229,8 +229,8 @@ export function buildIssuesFromAssets(assets: SlimAsset[]): AuditIssue[] {
 
   const missingDeviceSpec = assets.filter((asset) => {
     const cat = normalizeString(asset.category).toLowerCase();
-    const isIpad = cat.includes("ipad");
-    return isIpad && !normalizeString(asset.deviceSpec);
+    const needsDeviceSpec = cat.includes("ipad") || cat.includes("laptop");
+    return needsDeviceSpec && !normalizeString(asset.deviceSpec);
   });
   if (missingDeviceSpec.length) {
     issues.push({

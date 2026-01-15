@@ -73,3 +73,21 @@ Vitest covers zod validators and asset service logic.
 - Set `DATABASE_URL`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` in the hosting provider.
 - Neon-friendly: use the provided Prisma schema/migration; run `npm run migrate:deploy` during deploy.
 - Vercel: add env vars, enable `NODE_OPTIONS="--max-old-space-size=1024"` if needed for build sizes.
+
+## Desktop (Electron)
+- Dev: `npm run electron:dev`
+- Build installer: `npm run electron:build` (outputs to `dist/`)
+- Runtime config: copy `.env` to `%APPDATA%\assetspace-ai\.env`
+- Logs: `%APPDATA%\assetspace-ai\logs\main.log` (also available via Help -> Open Main Log)
+
+## Windows Code Signing (optional)
+Electron-builder signs automatically when these environment variables are set:
+- `CSC_LINK` (path or base64 to `.pfx`) and `CSC_KEY_PASSWORD`
+- or `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD`
+
+Example:
+```powershell
+$env:CSC_LINK="C:\path\cert.pfx"
+$env:CSC_KEY_PASSWORD="your-password"
+npm run electron:build
+```

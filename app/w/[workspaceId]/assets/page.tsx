@@ -1,4 +1,3 @@
-import { CreateAssetForm } from "@/components/create-asset-form";
 import { ImportExportBar } from "@/components/import-export-bar";
 import { AssetStatusBadge } from "@/components/asset-status-badge";
 import { AssetListToggle } from "@/components/asset-list-toggle";

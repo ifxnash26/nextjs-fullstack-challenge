@@ -3,8 +3,9 @@ import Link from "next/link";
 import { getCurrentSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canEditAssets, effectiveRole } from "@/lib/rbac";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { CreateAssetForm } from "@/components/create-asset-form";
+import { listCategoryOptions } from "@/lib/categories";
 
 export default async function NewAssetPage({ params }: { params: { workspaceId: string } }) {
   const session = await getCurrentSession();
@@ -25,6 +26,13 @@ export default async function NewAssetPage({ params }: { params: { workspaceId: 
     redirect(`/w/${params.workspaceId}/assets`);
   }
 
+  const categories = await listCategoryOptions(params.workspaceId);
+  const people = await prisma.person.findMany({
+    where: { workspaceId: params.workspaceId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
@@ -43,9 +51,10 @@ export default async function NewAssetPage({ params }: { params: { workspaceId: 
 
       <Card>
         <CardContent>
-          <CreateAssetForm workspaceId={params.workspaceId} />
+          <CreateAssetForm workspaceId={params.workspaceId} categories={categories} people={people} />
         </CardContent>
       </Card>
     </div>
   );
 }
+

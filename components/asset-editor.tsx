@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,15 +35,29 @@ interface PersonClientModel {
 interface Props {
   asset: AssetClientModel;
   people: PersonClientModel[];
+  categories: string[];
   canEdit: boolean;
 }
 
-export function AssetEditor({ asset, people, canEdit }: Props) {
+export function AssetEditor({ asset, people, categories, canEdit }: Props) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
-  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [assigneeOpen, setAssigneeOpen] = useState(false);
+  const assigneeMenuRef = useRef<HTMLDivElement | null>(null);
+  const assigneeInputRef = useRef<HTMLInputElement | null>(null);
+  const customCategoryValue = "__custom__";
+  const normalizeCategory = (value: string) => value.trim().replace(/\s+/g, " ");
+  const categoryMap = new Map(
+    categories.map((category) => [normalizeCategory(category).toLowerCase(), category]),
+  );
+  const initialCategory = asset.category ?? "";
+  const initialCategoryKey = normalizeCategory(initialCategory).toLowerCase();
+  const matchedCategory = initialCategoryKey ? categoryMap.get(initialCategoryKey) : undefined;
+  const initialCategoryValue = matchedCategory ?? initialCategory;
+  const initialCategorySelection = matchedCategory ? matchedCategory : initialCategory ? customCategoryValue : "";
+  const initialCustomCategory = matchedCategory ? "" : initialCategory;
   const [formState, setFormState] = useState({
     status: asset.status as AssetStatusValue,
     assignedToId: asset.assignedToId ?? "",
@@ -52,35 +66,81 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
     deviceSpec: asset.deviceSpec ?? "",
     accessories: asset.accessories ?? "",
     brand: asset.brand ?? "",
-    category: asset.category ?? "",
+    category: initialCategoryValue ?? "",
     location: asset.location ?? "",
     purchaseDate: asset.purchaseDate ?? "",
     warrantyEnd: asset.warrantyEnd ?? "",
     notes: asset.notes ?? "",
   });
+  const [categoryValue, setCategoryValue] = useState(initialCategorySelection);
+  const [customCategory, setCustomCategory] = useState(initialCustomCategory);
 
-  const isIpad = (formState.category || asset.category || "").toLowerCase().includes("ipad");
-  const applyAssigneeFilter = () => {
-    setAssigneeFilter(assigneeSearch.trim());
-  };
-  const clearAssigneeFilter = () => {
-    setAssigneeSearch("");
-    setAssigneeFilter("");
-  };
-  const normalizedAssigneeFilter = assigneeFilter.trim().toLowerCase();
+  const normalizedCategory = (formState.category || "").trim().toLowerCase();
+  const isIpad = normalizedCategory.includes("ipad");
+  const isLaptop = normalizedCategory.includes("laptop");
+  const showDeviceSpec = isIpad || isLaptop;
+  const deviceSpecLabel = isLaptop ? "Device spec (Laptop)" : "Device spec (iPad)";
+  const deviceSpecPlaceholder = isLaptop ? "e.g. 16GB RAM, 512GB SSD" : "e.g. 256GB, Wi-Fi + Cellular";
+  const normalizedAssigneeFilter = assigneeSearch.trim().toLowerCase();
   const filteredPeople = normalizedAssigneeFilter
     ? people.filter((person) => person.name.toLowerCase().includes(normalizedAssigneeFilter))
     : people;
   const selectedPerson = formState.assignedToId
     ? people.find((person) => person.id === formState.assignedToId)
     : undefined;
-  const visiblePeople =
-    selectedPerson && !filteredPeople.some((person) => person.id === selectedPerson.id)
-      ? [selectedPerson, ...filteredPeople]
-      : filteredPeople;
+
+  useEffect(() => {
+    const handleClick = (event: MouseEvent) => {
+      if (!assigneeMenuRef.current) return;
+      if (!assigneeMenuRef.current.contains(event.target as Node)) {
+        setAssigneeOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (assigneeOpen) {
+      assigneeInputRef.current?.focus();
+    }
+  }, [assigneeOpen]);
 
   const updateField = (key: keyof typeof formState, value: string) => {
     setFormState((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleAssigneeMenu = () => {
+    if (!canEdit) return;
+    if (assigneeOpen) {
+      setAssigneeOpen(false);
+      return;
+    }
+    setAssigneeSearch("");
+    setAssigneeOpen(true);
+  };
+
+  const selectAssignee = (id: string) => {
+    updateField("assignedToId", id);
+    setAssigneeOpen(false);
+    setAssigneeSearch("");
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryValue(value);
+    if (value === customCategoryValue) {
+      updateField("category", customCategory);
+      return;
+    }
+    setCustomCategory("");
+    updateField("category", value);
+  };
+
+  const handleCustomCategoryChange = (value: string) => {
+    setCustomCategory(value);
+    updateField("category", value);
   };
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -141,49 +201,68 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
             ))}
           </Select>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <label className="text-sm font-medium text-foreground" htmlFor="assignee">
             Assigned to
           </label>
-          <div className="flex items-center gap-2">
-            <label className="sr-only" htmlFor="assigneeSearch">
-              Search assignees
-            </label>
-            <Input
-              id="assigneeSearch"
-              value={assigneeSearch}
-              onChange={(e) => setAssigneeSearch(e.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  applyAssigneeFilter();
-                }
-              }}
-              placeholder="Search assignees..."
-            />
-            <Button type="button" variant="secondary" className="rounded-full px-4 text-sm" onClick={applyAssigneeFilter}>
-              Search
-            </Button>
-            {assigneeFilter ? (
-              <Button type="button" variant="ghost" className="rounded-full px-3 text-sm" onClick={clearAssigneeFilter}>
-                Clear
-              </Button>
+          <div className="relative" ref={assigneeMenuRef}>
+            <button
+              type="button"
+              className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-left text-sm text-foreground shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={toggleAssigneeMenu}
+              disabled={!canEdit}
+              aria-haspopup="listbox"
+              aria-expanded={assigneeOpen}
+              id="assignee"
+            >
+              <span className={selectedPerson ? "text-foreground" : "text-muted-foreground"}>
+                {selectedPerson ? selectedPerson.name : "Unassigned"}
+              </span>
+              <span className="text-xs text-muted-foreground">v</span>
+            </button>
+            {assigneeOpen ? (
+              <div className="absolute z-10 mt-2 w-full rounded-md border border-border bg-card p-2 shadow-lg">
+                <label className="sr-only" htmlFor="assigneeSearch">
+                  Search assignees
+                </label>
+                <Input
+                  id="assigneeSearch"
+                  ref={assigneeInputRef}
+                  value={assigneeSearch}
+                  onChange={(e) => setAssigneeSearch(e.target.value)}
+                  placeholder="Search assignees..."
+                  className="h-9"
+                />
+                <div className="mt-2 max-h-48 overflow-auto">
+                  {!normalizedAssigneeFilter || "unassigned".includes(normalizedAssigneeFilter) ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center rounded-md px-2 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      onClick={() => selectAssignee("")}
+                    >
+                      Unassigned
+                    </button>
+                  ) : null}
+                  {filteredPeople.length ? (
+                    filteredPeople.map((person) => (
+                      <button
+                        key={person.id}
+                        type="button"
+                        className={`flex w-full items-center rounded-md px-2 py-2 text-left text-sm hover:bg-muted/60 ${
+                          person.id === formState.assignedToId ? "bg-muted text-foreground font-semibold" : "text-foreground"
+                        }`}
+                        onClick={() => selectAssignee(person.id)}
+                      >
+                        {person.name}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-2 py-2 text-xs text-muted-foreground">No matches found.</p>
+                  )}
+                </div>
+              </div>
             ) : null}
           </div>
-          <Select
-            id="assignee"
-            name="assignee"
-            value={formState.assignedToId ?? ""}
-            onChange={(e) => updateField("assignedToId", e.target.value)}
-            disabled={!canEdit}
-          >
-            <option value="">Unassigned</option>
-            {visiblePeople.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </Select>
         </div>
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground" htmlFor="location">
@@ -201,14 +280,37 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
           <label className="text-sm font-medium text-foreground" htmlFor="category">
             Category
           </label>
-          <Input
+          <Select
             id="category"
             name="category"
-            value={formState.category}
-            onChange={(e) => updateField("category", e.target.value)}
+            value={categoryValue}
+            onChange={(e) => handleCategoryChange(e.target.value)}
             disabled={!canEdit}
-          />
+          >
+            <option value="">Uncategorized</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+            <option value={customCategoryValue}>Add new category...</option>
+          </Select>
         </div>
+        {categoryValue === customCategoryValue ? (
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground" htmlFor="customCategory">
+              New category
+            </label>
+            <Input
+              id="customCategory"
+              name="customCategory"
+              value={customCategory}
+              onChange={(e) => handleCustomCategoryChange(e.target.value)}
+              disabled={!canEdit}
+              placeholder="e.g. Monitor"
+            />
+          </div>
+        ) : null}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground" htmlFor="serialNumber">
             Serial number
@@ -262,24 +364,26 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
           />
         </div>
       </div>
-      {isIpad ? (
+      {showDeviceSpec ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground" htmlFor="imeiNumber">
-              IMEI number
-            </label>
-            <Input
-              id="imeiNumber"
-              name="imeiNumber"
-              value={formState.imeiNumber}
-              onChange={(e) => updateField("imeiNumber", e.target.value)}
-              disabled={!canEdit}
-              placeholder="IMEI (for iPad)"
-            />
-          </div>
-          <div className="space-y-1.5">
+          {isIpad ? (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground" htmlFor="imeiNumber">
+                IMEI number
+              </label>
+              <Input
+                id="imeiNumber"
+                name="imeiNumber"
+                value={formState.imeiNumber}
+                onChange={(e) => updateField("imeiNumber", e.target.value)}
+                disabled={!canEdit}
+                placeholder="IMEI (for iPad)"
+              />
+            </div>
+          ) : null}
+          <div className={`space-y-1.5${isIpad ? "" : " md:col-span-2"}`}>
             <label className="text-sm font-medium text-foreground" htmlFor="deviceSpec">
-              Device spec (iPad)
+              {deviceSpecLabel}
             </label>
             <Input
               id="deviceSpec"
@@ -287,22 +391,24 @@ export function AssetEditor({ asset, people, canEdit }: Props) {
               value={formState.deviceSpec}
               onChange={(e) => updateField("deviceSpec", e.target.value)}
               disabled={!canEdit}
-              placeholder="e.g. 256GB, Wi-Fi + Cellular"
+              placeholder={deviceSpecPlaceholder}
             />
           </div>
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="text-sm font-medium text-foreground" htmlFor="accessories">
-              Accessories (iPad)
-            </label>
-            <Input
-              id="accessories"
-              name="accessories"
-              value={formState.accessories}
-              onChange={(e) => updateField("accessories", e.target.value)}
-              disabled={!canEdit}
-              placeholder="e.g. Pencil, keyboard case"
-            />
-          </div>
+          {isIpad ? (
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-sm font-medium text-foreground" htmlFor="accessories">
+                Accessories (iPad)
+              </label>
+              <Input
+                id="accessories"
+                name="accessories"
+                value={formState.accessories}
+                onChange={(e) => updateField("accessories", e.target.value)}
+                disabled={!canEdit}
+                placeholder="e.g. Pencil, keyboard case"
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className="space-y-1.5">

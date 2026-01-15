@@ -22,19 +22,24 @@ export function WorkspaceHeader({ workspace, membershipRole, userRole, userEmail
   ];
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-lg bg-primary/15 text-primary flex items-center justify-center font-semibold">A</div>
-            <div>
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-background/80 backdrop-blur">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border/80 to-transparent" />
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-sm font-semibold text-foreground">
+              A
+            </div>
+            <div className="leading-tight">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Workspace</p>
               <p className="text-sm font-semibold text-foreground">{workspace.name}</p>
               <p className="text-xs text-muted-foreground">
                 {membershipRole} {userRole === "ADMIN" && membershipRole !== "ADMIN" ? "(org admin)" : ""}
               </p>
             </div>
           </div>
-          <nav className="flex items-center gap-3 text-sm font-medium text-muted-foreground">
+          <div className="hidden h-8 w-px bg-border/60 md:block" />
+          <nav className="flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 p-1 text-sm font-medium text-muted-foreground">
             {links.map((link) => {
               const isActive = pathname.startsWith(link.href);
               return (
@@ -42,8 +47,8 @@ export function WorkspaceHeader({ workspace, membershipRole, userRole, userEmail
                   key={link.href}
                   href={link.href}
                   className={cn(
-                    "rounded-full px-3 py-1 transition-colors hover:text-foreground",
-                    isActive ? "bg-muted text-foreground" : "",
+                    "rounded-full px-3 py-1.5 transition-all hover:text-foreground",
+                    isActive ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
                   )}
                 >
                   {link.label}
@@ -54,8 +59,8 @@ export function WorkspaceHeader({ workspace, membershipRole, userRole, userEmail
               <Link
                 href="/admin/users"
                 className={cn(
-                  "rounded-full px-3 py-1 transition-colors hover:text-foreground",
-                  pathname.startsWith("/admin") ? "bg-muted text-foreground" : "",
+                  "rounded-full px-3 py-1.5 transition-all hover:text-foreground",
+                  pathname.startsWith("/admin") ? "bg-background text-foreground shadow-sm" : "text-muted-foreground",
                 )}
               >
                 Admin
@@ -63,9 +68,12 @@ export function WorkspaceHeader({ workspace, membershipRole, userRole, userEmail
             ) : null}
           </nav>
         </div>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="hidden items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1 text-xs text-muted-foreground md:flex">
+            <span className="h-2 w-2 rounded-full bg-emerald-400/70" />
+            <span className="max-w-[220px] truncate">{userEmail}</span>
+          </div>
           <ThemeToggle />
-          <span className="hidden md:inline">{userEmail}</span>
           <SignOutButton />
         </div>
       </div>

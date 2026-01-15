@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentSession } from "@/lib/auth";
 import { getAsset } from "@/lib/assets";
+import { listCategoryOptions } from "@/lib/categories";
 import { prisma } from "@/lib/prisma";
 import { canEditAssets, effectiveRole } from "@/lib/rbac";
 import { format } from "date-fns";
@@ -108,6 +109,7 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
   if (!asset) redirect(`/w/${params.workspaceId}/assets`);
 
   const people = await prisma.person.findMany({ where: { workspaceId: params.workspaceId }, orderBy: { name: "asc" } });
+  const categoryNames = await listCategoryOptions(params.workspaceId);
   const canEdit = canEditAssets(role);
   const clientAsset = {
     id: asset.id,
@@ -163,12 +165,12 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle>Asset details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AssetEditor asset={clientAsset} people={clientPeople} canEdit={canEdit} />
-          </CardContent>
-        </Card>
+          <CardTitle>Asset details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AssetEditor asset={clientAsset} people={clientPeople} categories={categoryNames} canEdit={canEdit} />
+        </CardContent>
+      </Card>
         <Card>
           <CardHeader>
             <CardTitle>Notes</CardTitle>
@@ -210,6 +212,7 @@ export default async function AssetDetailPage({ params }: { params: { workspaceI
     </div>
   );
 }
+
 
 
 

@@ -2,6 +2,7 @@ import { AssetStatus, Role } from "@prisma/client";
 import { Parser as CsvParser } from "json2csv";
 import { parse } from "csv-parse/sync";
 import { prisma } from "./prisma";
+import { resolveCategoryName } from "./categories";
 import { AssetFilterInput, AssetInput, AssetUpdateInput, assetFilterSchema, assetInputSchema } from "./validators";
 import { canEditAssets, effectiveRole, hasRequiredRole } from "./rbac";
 import { getWorkspaceMembership } from "./workspaces";
@@ -110,9 +111,11 @@ async function getEffectiveRole(userId: string, workspaceId: string) {
 }
 
 async function createAssetRecord(workspaceId: string, userId: string, parsedInput: AssetInput) {
+  const categoryName = await resolveCategoryName(workspaceId, parsedInput.category);
   const asset = await prisma.asset.create({
     data: {
       ...parsedInput,
+      category: categoryName,
       workspaceId,
     },
     include: { assignedTo: true },
@@ -133,14 +136,20 @@ async function updateAssetRecord(
     throw new Error("Asset not found");
   }
 
+  const data = { ...parsedInput };
+  if (parsedInput.category !== undefined) {
+    const categoryName = await resolveCategoryName(workspaceId, parsedInput.category);
+    data.category = categoryName;
+  }
+
   const updated = await prisma.asset.update({
     where: { id: assetId },
-    data: parsedInput,
+    data,
     include: { assignedTo: true },
   });
 
   const changes: Record<string, { before: unknown; after: unknown }> = {};
-  for (const key of Object.keys(parsedInput)) {
+  for (const key of Object.keys(data)) {
     const typedKey = key as keyof AssetUpdateInput;
     const before = (existing as any)[typedKey];
     const after = (updated as any)[typedKey];

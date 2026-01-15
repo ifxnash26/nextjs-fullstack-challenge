@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { effectiveRole, hasRequiredRole } from "@/lib/rbac";
 import { ActionType } from "@/server/ai/actions/schemas";
 import { filterSpecToAssetFilterInput } from "@/lib/ai";
+import { resolveCategoryName } from "@/lib/categories";
 import { AssetStatus, Role } from "@prisma/client";
 
 type PlanRecord = {
@@ -123,7 +124,6 @@ async function applyUpdates(workspaceId: string, userId: string, action: any, ro
     if (action.payload.deviceSpec) data.deviceSpec = action.payload.deviceSpec;
     if (action.payload.accessories) data.accessories = action.payload.accessories;
 
-    if (Object.keys(data).length === 0) continue;
 
     let assignedToId: string | null | undefined = action.payload.assignedToId;
     const assignedToName =
@@ -140,7 +140,7 @@ async function applyUpdates(workspaceId: string, userId: string, action: any, ro
       assignedToId = person.id;
     }
 
-    if (action.type === ActionType.ASSIGN_ASSET && assignedToId === undefined && assignedToName) {
+    if (assignedToId === undefined && assignedToName) {
       const usernameCandidate = assignedToName.split("@")[0];
       const candidates = await prisma.person.findMany({
         where: {
@@ -169,6 +169,12 @@ async function applyUpdates(workspaceId: string, userId: string, action: any, ro
 
     if (assignedToId !== undefined) {
       data.assignedToId = assignedToId ?? null;
+    }
+    if (Object.keys(data).length === 0) continue;
+
+    if (data.category) {
+      const categoryName = await resolveCategoryName(workspaceId, data.category);
+      data.category = categoryName;
     }
 
     const updated = await prisma.asset.update({
@@ -232,12 +238,15 @@ async function applyCreate(workspaceId: string, userId: string, action: any, rol
 
   const createdIds: string[] = [];
   for (const tag of tags) {
+    const categoryName = action.payload.category
+      ? await resolveCategoryName(workspaceId, action.payload.category)
+      : undefined;
     const asset = await prisma.asset.create({
       data: {
         assetTag: tag,
         workspaceId,
         status: action.payload.status ?? undefined,
-        category: action.payload.category ?? undefined,
+        category: categoryName ?? undefined,
         location: action.payload.location ?? undefined,
         assignedToId: action.payload.assignedToId ?? undefined,
         warrantyEnd: action.payload.warrantyEnd ?? undefined,
@@ -345,3 +354,8 @@ export async function POST(request: Request) {
     affectedAssetIds,
   });
 }
+
+
+
+
+

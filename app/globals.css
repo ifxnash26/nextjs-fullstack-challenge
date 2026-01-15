@@ -54,6 +54,7 @@
       radial-gradient(circle at 80% 0%, rgba(248, 180, 55, 0.08), transparent 26%),
       radial-gradient(circle at 50% 60%, rgba(45, 212, 191, 0.08), transparent 24%);
     min-height: 100vh;
+    scrollbar-gutter: stable;
   }
 
   .dark body {
@@ -61,6 +62,35 @@
       radial-gradient(circle at 80% 0%, rgba(248, 180, 55, 0.12), transparent 26%),
       radial-gradient(circle at 50% 60%, rgba(45, 212, 191, 0.12), transparent 24%),
       radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.04), transparent 28%);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.35) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(15, 23, 42, 0.35);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  .dark * {
+    scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  }
+
+  .dark *::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.4);
   }
 }
 
