@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FilterSpec } from "@/lib/validators";
-import { Direction, SortBy, Status } from "@/server/ai/filterSpec";
+import { ASSET_STATUSES, FILTER_DIRECTIONS, type AssetStatusValue, type FilterDirection, type FilterSortBy } from "@/lib/constants";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,16 +21,16 @@ const statusLabels: Record<string, string> = {
   RETIRED: "Retired",
 };
 
-function mapSortToSortBy(value: string | null): SortBy | undefined {
+function mapSortToSortBy(value: string | null): FilterSortBy | undefined {
   switch (value) {
     case "updatedAt":
-      return SortBy.UPDATED;
+      return "UPDATED";
     case "createdAt":
-      return SortBy.CREATED;
+      return "CREATED";
     case "warrantyEnd":
-      return SortBy.WARRANTY_END;
+      return "WARRANTY_END";
     case "purchaseDate":
-      return SortBy.PURCHASE_DATE;
+      return "PURCHASE_DATE";
     default:
       return undefined;
   }
@@ -73,7 +73,7 @@ export function AskAiFilter({ workspaceId }: { workspaceId: string }) {
       .getAll("status")
       .flatMap((value) => value.split(","))
       .map((value) => normalizeStatus(value))
-      .filter((value) => Object.values(Status).includes(value as Status)) as Status[];
+      .filter((value) => ASSET_STATUSES.includes(value as AssetStatusValue)) as AssetStatusValue[];
 
     const asNumber = (key: string) => {
       const value = searchParams.get(key);
@@ -95,10 +95,15 @@ export function AskAiFilter({ workspaceId }: { workspaceId: string }) {
 
     const sortParam = searchParams.get("sort");
     const sortBy = mapSortToSortBy(sortParam);
-    if (sortBy) spec.sortBy = sortBy;
+    if (sortBy) spec.sortBy = sortBy as FilterSpec["sortBy"];
 
     const direction = searchParams.get("direction");
-    if (direction) spec.direction = direction.toUpperCase() as Direction;
+    if (direction) {
+      const normalized = direction.toUpperCase();
+      if (FILTER_DIRECTIONS.includes(normalized as FilterDirection)) {
+        spec.direction = normalized as FilterSpec["direction"];
+      }
+    }
 
     const warrantyExpiringInDays = asNumber("warrantyExpiringInDays");
     if (warrantyExpiringInDays) spec.warrantyExpiringInDays = warrantyExpiringInDays;
@@ -175,13 +180,13 @@ export function AskAiFilter({ workspaceId }: { workspaceId: string }) {
     if (spec.assignedTo) params.set("assignedTo", spec.assignedTo);
     if (spec.statuses?.length) spec.statuses.forEach((status) => params.append("status", status));
     if (spec.sortBy) {
-      const sortMap: Record<SortBy, string> = {
-        [SortBy.UPDATED]: "updatedAt",
-        [SortBy.CREATED]: "createdAt",
-        [SortBy.WARRANTY_END]: "warrantyEnd",
-        [SortBy.PURCHASE_DATE]: "purchaseDate",
+      const sortMap: Record<FilterSortBy, string> = {
+        UPDATED: "updatedAt",
+        CREATED: "createdAt",
+        WARRANTY_END: "warrantyEnd",
+        PURCHASE_DATE: "purchaseDate",
       };
-      params.set("sort", sortMap[spec.sortBy]);
+      params.set("sort", sortMap[spec.sortBy as FilterSortBy]);
     }
     if (spec.direction) params.set("direction", spec.direction.toLowerCase());
     if (spec.warrantyExpiringInDays) params.set("warrantyExpiringInDays", spec.warrantyExpiringInDays.toString());

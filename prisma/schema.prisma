@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -91,6 +90,7 @@ model Asset {
   location      String?
   purchaseDate  DateTime?
   warrantyEnd   DateTime?
+  handoffPrintedAt DateTime?
   notes         String?
   deletedAt     DateTime?
   workspaceId   String

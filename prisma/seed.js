@@ -1,8 +1,11 @@
 /* eslint-disable no-console */
 const { PrismaClient, Role, AssetStatus } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 
-const prisma = new PrismaClient();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL || "admin@example.com";
@@ -237,4 +240,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });

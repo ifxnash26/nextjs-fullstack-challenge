@@ -72,19 +72,36 @@ async function updateUserRoleAction(formData: FormData) {
   revalidatePath("/admin/users");
 }
 
+type WorkspaceOption = {
+  id: string;
+  name: string;
+};
+
+type UserWithMemberships = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: Role;
+  memberships: Array<{ workspace: { name: string } }>;
+};
+
 export default async function AdminUsersPage() {
   const session = await getCurrentSession();
   if (!session?.user || !canManageUsers(session.user.role)) {
     redirect("/login");
   }
 
-  const [users, workspaces] = await Promise.all([
-    prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      include: { memberships: { include: { workspace: true } } },
-    }),
-    prisma.workspace.findMany({ orderBy: { name: "asc" } }),
-  ]);
+  const usersPromise = prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { memberships: { include: { workspace: true } } },
+  }) as Promise<UserWithMemberships[]>;
+
+  const workspacesPromise = prisma.workspace.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  }) as Promise<WorkspaceOption[]>;
+
+  const [users, workspaces] = await Promise.all([usersPromise, workspacesPromise]);
 
   return (
     <div className="w-full space-y-6 px-4 md:px-6">
@@ -141,7 +158,7 @@ export default async function AdminUsersPage() {
               </label>
               <Select id="workspaceId" name="workspaceId" defaultValue="">
                 <option value="">None</option>
-                {workspaces.map((ws) => (
+                {workspaces.map((ws: WorkspaceOption) => (
                   <option key={ws.id} value={ws.id}>
                     {ws.name}
                   </option>
@@ -170,7 +187,7 @@ export default async function AdminUsersPage() {
             <span>Workspaces</span>
             <span className="text-right">Actions</span>
           </div>
-          {users.map((user) => (
+          {users.map((user: UserWithMemberships) => (
             <div key={user.id} className="grid grid-cols-5 items-center rounded-lg border border-border bg-card px-3 py-2 text-sm">
               <div className="font-semibold text-foreground">{user.name ?? "—"}</div>
               <div className="truncate text-muted-foreground">{user.email}</div>
